@@ -8,7 +8,8 @@ function clickEvent(params) {
     const nodeId = params.nodes[0];
     const node = nodes.get(nodeId);
 
-    if (node && node.isTrigger) {
+    // FIX: Catch Union Nodes (isUnion) and Triggers (isTrigger)
+    if (node && (node.isTrigger || node.isUnion)) {
       handleTriggerClick(nodeId);
       return;
     }
@@ -31,8 +32,8 @@ function hoverNodeEvent(params) {
   const nodeId = params.node;
   window.hoveredNodeId = nodeId;
   
-  // If it's a person node (not trigger/union), show sibling toggle
   const node = nodes.get(nodeId);
+  // Only show trigger for actual people (not triggers or unions)
   if (node && !node.isTrigger && !node.isUnion) {
     if (window.showSiblingToggle) window.showSiblingToggle(nodeId);
   }
@@ -41,7 +42,6 @@ function hoverNodeEvent(params) {
 function blurNodeEvent(params) {
   const nodeId = params.node;
   if (window.hoveredNodeId === nodeId) window.hoveredNodeId = null;
-  
   if (window.hideSiblingToggle) window.hideSiblingToggle(nodeId);
 }
 
