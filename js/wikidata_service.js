@@ -21,6 +21,7 @@ async function searchEntity(term) {
 
 /**
  * Get family members, gender, AND parentage info for children.
+ * Uses COALESCE to robustly find the co-parent.
  */
 async function getFamilyData(qid) {
   const query = `
@@ -28,28 +29,37 @@ async function getFamilyData(qid) {
       VALUES ?subject { wd:${qid} }
       
       {
+        # 1. CHILDREN & Their Other Parent
         ?subject wdt:P40 ?relative .
         BIND("child" AS ?type)
-        # Try to find the OTHER parent (Father P22 or Mother P25) who is NOT the subject
-        OPTIONAL {
-           { ?relative wdt:P22 ?otherParent } UNION { ?relative wdt:P25 ?otherParent }
-           FILTER(?otherParent != ?subject)
-        }
-      } UNION {
-        ?subject wdt:P22 ?relative .
+        
+        # Robustly try to find the other parent (P22=Father, P25=Mother)
+        OPTIONAL { ?relative wdt:P22 ?p22 . FILTER(?p22 != ?subject) }
+        OPTIONAL { ?relative wdt:P25 ?p25 . FILTER(?p25 != ?subject) }
+        BIND(COALESCE(?p22, ?p25) AS ?otherParent)
+      } 
+      UNION {
+        # 2. PARENTS
+        { ?subject wdt:P22 ?relative } UNION { ?subject wdt:P25 ?relative }
         BIND("parent" AS ?type)
-      } UNION {
-        ?subject wdt:P25 ?relative .
-        BIND("parent" AS ?type)
-      } UNION {
+      } 
+      UNION {
+        # 3. SIBLINGS
         ?subject wdt:P3373 ?relative .
         BIND("sibling" AS ?type)
-      } UNION {
+      } 
+      UNION {
+        # 4. SPOUSES (Explicit)
         ?subject wdt:P26 ?relative .
         BIND("spouse" AS ?type)
-      } UNION {
-        ?relative wdt:P40 ?subject .
-        BIND("parent" AS ?type)
+      } 
+      UNION {
+        # 5. IMPLIED PARTNERS (Co-parents)
+        # Find children, then find their other parent.
+        ?subject wdt:P40 ?child .
+        { ?child wdt:P22 ?relative } UNION { ?child wdt:P25 ?relative }
+        FILTER(?relative != ?subject)
+        BIND("spouse" AS ?type)
       }
       
       OPTIONAL { ?relative wdt:P21 ?gender . }
@@ -71,12 +81,12 @@ async function getFamilyData(qid) {
 
   const family = {
     parents: [],
-    children: [], // Will now store { id, label, gender, parentIds: [] }
+    children: [], // Stores { id, label, gender, otherParents: [] }
     siblings: [],
     spouses: []
   };
 
-  const seenChildren = {}; // Map ID -> Object to aggregate parents
+  const seenChildren = {}; 
   const seenOthers = new Set();
 
   if (data.results && data.results.bindings) {
