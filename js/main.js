@@ -128,4 +128,4 @@ function goRandom() {
   const ra = randomPeople[Math.floor(Math.random() * randomPeople.length)];
   addItem(cf, ra);
   go(); 
-}
+} 
