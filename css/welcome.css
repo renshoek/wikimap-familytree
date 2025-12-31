@@ -1,0 +1,107 @@
+/* Contains for the info initially presented to the user */
+#info {
+  width: 600px;
+  max-width: 95vw;
+  text-align: center;
+
+  position: absolute;
+  /* Use flexbox to center content vertically if needed, but fixed top % is safer for scrolling */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+#info h1 {
+  margin: 0;
+  margin-bottom: 5px;
+  font-size: 2em;
+}
+
+#info h3 {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  font-size: 1.2em;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 5px;
+}
+
+#info p {
+  margin: 0 0 15px;
+  color: #555;
+}
+
+/* Controls Guide Styles */
+.controls-guide {
+  text-align: left;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 10px 15px;
+  border-radius: 5px;
+  font-size: 0.9em;
+  margin-bottom: 15px;
+}
+
+.controls-guide ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.controls-guide li {
+  margin-bottom: 6px;
+}
+
+.controls-guide i {
+  width: 20px;
+  text-align: center;
+  display: inline-block;
+}
+
+/* Suggestions Grid Styles */
+.suggestion-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.suggestion-item {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.suggestion-item:hover {
+  background-color: #e0e0e0;
+  border-color: #bbb;
+}
+
+.suggestion-item.disabled {
+  background-color: #ddd;
+  color: #999;
+  cursor: default;
+  text-decoration: line-through;
+  border-color: #ddd;
+  pointer-events: none;
+}
+
+
+/* == Rules for small screens == */
+
+@media (max-width: 750px) { /* Full width on small screens */
+  #info {
+    width: 95%;
+    padding: 15px;
+    top: 55%; /* Shift down slightly to avoid covering nav bar */
+  }
+}

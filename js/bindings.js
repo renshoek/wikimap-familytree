@@ -1,0 +1,131 @@
+/* global nodes, network, isTouchDevice, shepherd, updateNodeValue, handleTriggerClick, showSiblingToggle, hideSiblingToggle */
+/* global expandNode, traceBack, resetProperties, go, goRandom, clearNetwork, unwrap, addItem */
+
+let lastClickedNode = null;
+
+function clickEvent(params) {
+  if (params.nodes.length) {
+    const nodeId = params.nodes[0];
+    const node = nodes.get(nodeId);
+
+    if (node && node.isTrigger) {
+      handleTriggerClick(nodeId);
+      return;
+    }
+
+    if (isTouchDevice || nodeId === lastClickedNode) {
+      traceBack(nodeId);
+    } else {
+      lastClickedNode = nodeId;
+      traceBack(nodeId);
+      expandNode(nodeId, true);
+    }
+  } else {
+    lastClickedNode = null;
+    resetProperties();
+  }
+}
+
+// Hover Event for Siblings
+function hoverNodeEvent(params) {
+  const nodeId = params.node;
+  window.hoveredNodeId = nodeId;
+  
+  // If it's a person node (not trigger/union), show sibling toggle
+  const node = nodes.get(nodeId);
+  if (node && !node.isTrigger && !node.isUnion) {
+    if (window.showSiblingToggle) window.showSiblingToggle(nodeId);
+  }
+}
+
+function blurNodeEvent(params) {
+  const nodeId = params.node;
+  if (window.hoveredNodeId === nodeId) window.hoveredNodeId = null;
+  
+  if (window.hideSiblingToggle) window.hideSiblingToggle(nodeId);
+}
+
+function openPageForId(nodeId) {
+  const node = nodes.get(nodeId);
+  if (node && !node.isTrigger && !node.isUnion) {
+    const page = encodeURIComponent(unwrap(node.label));
+    const url = `https://en.wikipedia.org/wiki/${page}`;
+    window.open(url, '_blank');
+  }
+}
+
+function globalKeyHandler(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const key = e.key.toLowerCase();
+  
+  if (key === 'd' || key === 'delete' || key === 'backspace') {
+    if (lastClickedNode) {
+       nodes.remove(lastClickedNode);
+       lastClickedNode = null;
+    }
+  }
+}
+
+function bindNetwork() {
+  network.on('click', clickEvent);
+  network.on('doubleClick', (params) => {
+    if (params.nodes.length) openPageForId(params.nodes[0]);
+  });
+  
+  // HOVER BINDINGS
+  network.on('hoverNode', hoverNodeEvent);
+  network.on('blurNode', blurNodeEvent);
+}
+
+function bindSuggestions() {
+  const allSuggestions = [
+    "Queen Victoria", "Elizabeth II", "Charles III", "Henry VIII", 
+    "Napoleon", "Genghis Khan", "Julius Caesar", "Barack Obama", 
+    "John F. Kennedy", "Marie Curie", "Albert Einstein", "Zeus"
+  ];
+  
+  const container = document.getElementById('suggestions');
+  const cf = document.getElementById('input'); 
+
+  function renderSuggestions() {
+    container.innerHTML = '';
+    const shuffled = [...allSuggestions].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 15);
+    selected.forEach(topic => {
+      const el = document.createElement('div');
+      el.className = 'suggestion-item';
+      el.textContent = topic;
+      el.addEventListener('click', () => {
+        if (!el.classList.contains('disabled')) {
+          addItem(cf, topic);
+          el.classList.add('disabled');
+        }
+      });
+      container.appendChild(el);
+    });
+  }
+  renderSuggestions();
+  
+  const refreshBtn = document.getElementById('refresh-suggestions');
+  if (refreshBtn) refreshBtn.addEventListener('click', renderSuggestions);
+}
+
+function bind() {
+  bindSuggestions();
+  document.addEventListener('keydown', globalKeyHandler);
+
+  const submitButton = document.getElementById('submit');
+  submitButton.addEventListener('click', () => {
+    if(shepherd) shepherd.cancel(); 
+    go();
+  });
+
+  const randomButton = document.getElementById('random');
+  randomButton.addEventListener('click', goRandom);
+
+  const clearButton = document.getElementById('clear');
+  clearButton.addEventListener('click', clearNetwork);
+
+  const tourbtn = document.getElementById('tourinit');
+  if (tourbtn) tourbtn.addEventListener('click', () => shepherd.start());
+}
