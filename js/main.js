@@ -23,7 +23,7 @@ const options = {
     smooth: {
       type: 'cubicBezier', 
       forceDirection: 'vertical',
-      roundness: 0.5 // Increased roundness for "looser" look
+      roundness: 0.6 // Increased roundness for a draping/loose wire look
     },
     color: { color: '#666666', highlight: '#000000' }
   },
@@ -36,17 +36,18 @@ const options = {
   physics: {
     enabled: true,
     barnesHut: {
-      // LOOSE & RELAXED SETTINGS
-      gravitationalConstant: -350,  
-      centralGravity: 0.1,
-      springLength: 120,            // Longer resting length
-      springConstant: 0.01,         // Very Soft springs (Loose)
-      damping: 0.9,                 // Less friction (allows gentle sway)
+      // LOOSE & STRETCHY BUT STABLE
+      gravitationalConstant: -3000, // Very strong repulsion to keep nodes far apart
+      centralGravity: 0.01,         // Almost no pull to center (prevents clumping)
+      springLength: 250,            // Very long connection lines
+      springConstant: 0.005,        // Very weak springs (stretchy/loose)
+      damping: 0.15,                // High friction (low number = heavy air resistance) to stop movement quickly
       avoidOverlap: 1
     },
     stabilization: {
       enabled: true,
-      iterations: 1000
+      iterations: 1500,
+      updateInterval: 50
     }
   },
   layout: {
