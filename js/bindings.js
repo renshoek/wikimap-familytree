@@ -3,6 +3,17 @@
 
 let lastClickedNode = null;
 
+// FIX: Add missing functions to prevent crashes
+function traceBack(nodeId) {
+  // Placeholder: intended to highlight the path
+  console.log("Tracing back from:", nodeId);
+}
+
+function resetProperties() {
+  // Placeholder: intended to reset styles
+  console.log("Resetting properties");
+}
+
 function clickEvent(params) {
   if (params.nodes.length) {
     const nodeId = params.nodes[0];
@@ -116,7 +127,8 @@ function bind() {
 
   const submitButton = document.getElementById('submit');
   submitButton.addEventListener('click', () => {
-    if(shepherd) shepherd.cancel(); 
+    // FIX: Check if shepherd is defined before accessing
+    if(typeof shepherd !== 'undefined' && shepherd) shepherd.cancel(); 
     go();
   });
 
@@ -127,5 +139,7 @@ function bind() {
   clearButton.addEventListener('click', clearNetwork);
 
   const tourbtn = document.getElementById('tourinit');
-  if (tourbtn) tourbtn.addEventListener('click', () => shepherd.start());
+  if (tourbtn) tourbtn.addEventListener('click', () => {
+    if(typeof shepherd !== 'undefined') shepherd.start();
+  });
 }
