@@ -23,10 +23,9 @@ function recenterUnions(specificUnionIds = null) {
        const midX = (p1.x + p2.x) / 2;
        
        // Enforce Y position: strictly below parents
-       // We take the average Y of parents + OFFSET
        const targetY = ((p1.y + p2.y) / 2) + UNION_OFFSET_Y;
 
-       // Relaxed threshold (2px) so it doesn't jitter
+       // Relaxed threshold to prevent jitter
        if (Math.abs(u.x - midX) > 2 || Math.abs(u.y - targetY) > 2) {
          updates.push({ id: u.id, x: midX, y: targetY });
        }
@@ -45,7 +44,7 @@ window.applyTreeForces = function() {
     const edgesBody = network.body.edges;
     
     // Target height for Child levels
-    const TARGET_LEVEL_HEIGHT = 280; // Increased to match longer springs
+    const TARGET_LEVEL_HEIGHT = 280; 
 
     Object.values(edgesBody).forEach(edge => {
         const n1 = nodesBody[edge.fromId];
@@ -62,7 +61,7 @@ window.applyTreeForces = function() {
             
             // Gentler correction force
             if (Math.abs(dy) > 2) {
-                const force = dy * 0.1; // Reduced from 0.3 for smoother movement
+                const force = dy * 0.1; 
                 n1.y -= force * 0.5; 
                 n2.y += force * 0.5; 
             }
@@ -73,7 +72,7 @@ window.applyTreeForces = function() {
             
             // Only pull if they drift WAY further than targetDist
             if (Math.abs(dx) > targetDist + 50) {
-                 const pull = (Math.abs(dx) - (targetDist + 50)) * 0.02; // Very weak horizontal pull
+                 const pull = (Math.abs(dx) - (targetDist + 50)) * 0.02; 
                  if (n1.x > n2.x) n1.x -= pull;
                  else n1.x += pull;
             }
@@ -134,13 +133,20 @@ window.updateTriggerPositions = function() {
 };
 
 function animateNodes(updates) {
-  const duration = 400; // ms
+  const duration = 600; // Increased duration for smoother "growth"
   const start = performance.now();
   const initialPositions = {};
   
   updates.forEach(u => {
     const node = nodes.get(u.id);
-    if(node) initialPositions[u.id] = { x: node.x, y: node.y };
+    if(node) {
+        initialPositions[u.id] = { 
+            x: node.x, 
+            y: node.y,
+            // Capture initial font size for scaling animation
+            fontSize: (node.font && node.font.size !== undefined) ? node.font.size : 0 
+        };
+    }
   });
 
   function step(time) {
@@ -150,11 +156,20 @@ function animateNodes(updates) {
     const frameUpdates = updates.map(u => {
       const init = initialPositions[u.id];
       if (!init) return null;
-      return {
+      
+      const updateObj = {
         id: u.id,
         x: init.x + (u.x - init.x) * ease,
         y: init.y + (u.y - init.y) * ease
       };
+
+      // Animate Font Size if provided (This creates the growing effect)
+      if (u.fontSize !== undefined) {
+          const currentSize = init.fontSize + (u.fontSize - init.fontSize) * ease;
+          updateObj.font = { size: currentSize };
+      }
+
+      return updateObj;
     }).filter(n => n);
 
     if (frameUpdates.length > 0) {
@@ -218,3 +233,7 @@ function fixOverlap(yLevel) {
     recenterUnions();
   }
 }
+
+// EXPORTS
+window.animateNodes = animateNodes;
+window.fixOverlap = fixOverlap;
