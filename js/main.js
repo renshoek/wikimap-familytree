@@ -23,7 +23,7 @@ const options = {
     smooth: {
       type: 'cubicBezier', 
       forceDirection: 'vertical',
-      roundness: 0.4
+      roundness: 0.5 // Increased roundness for "looser" look
     },
     color: { color: '#666666', highlight: '#000000' }
   },
@@ -34,7 +34,20 @@ const options = {
     dragView: true
   },
   physics: {
-    enabled: false // STRICTLY DISABLED
+    enabled: true,
+    barnesHut: {
+      // LOOSE & RELAXED SETTINGS
+      gravitationalConstant: -350,  
+      centralGravity: 0.1,
+      springLength: 120,            // Longer resting length
+      springConstant: 0.01,         // Very Soft springs (Loose)
+      damping: 0.9,                 // Less friction (allows gentle sway)
+      avoidOverlap: 1
+    },
+    stabilization: {
+      enabled: true,
+      iterations: 1000
+    }
   },
   layout: {
     hierarchical: false 
@@ -56,6 +69,7 @@ function makeNetwork() {
   window.familyCache = {};
   window.initialExpanded = false;
   window.siblingState = {};
+  if (window.activeTriggers) window.activeTriggers.clear();
 
   nodes = new vis.DataSet();
   edges = new vis.DataSet();
