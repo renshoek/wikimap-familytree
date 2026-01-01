@@ -4,6 +4,7 @@
 window.familyCache = {}; 
 window.siblingState = {}; 
 window.hoveredNodeId = null;
+window.activeTriggers = new Set(); // Track triggers for sticky updates
 
 const COLORS = {
   male: '#ADD8E6',   
@@ -11,7 +12,8 @@ const COLORS = {
   unknown: '#E0E0E0',
   union: '#444444',
   unionButton: '#FFFFFF',
-  trigger: '#FFFFFF'
+  trigger: '#FFFFFF',
+  ringButton: '#FFD700' 
 };
 
 function getGenderColor(gender) {
@@ -32,8 +34,7 @@ function renameNode(oldId, newName, newQid, gender) {
 
   if (newId !== oldId) {
     if (nodes.get(newId)) {
-      nodes.remove(oldId); // Merge
-      // Re-link edges
+      nodes.remove(oldId); 
       const moves = [];
       edges.get().forEach(e => {
         if(e.from === oldId) moves.push({id:e.id, from: newId});
@@ -43,7 +44,6 @@ function renameNode(oldId, newName, newQid, gender) {
     } else {
       nodes.remove(oldId);
       nodes.add({ ...oldNode, ...updateData });
-      // Re-link edges
       const moves = [];
       edges.get().forEach(e => {
         if(e.from === oldId) moves.push({id:e.id, from: newId});
@@ -53,7 +53,6 @@ function renameNode(oldId, newName, newQid, gender) {
     }
     return newId;
   } else {
-    // Just update color
     nodes.update(updateData);
     return oldId;
   }
@@ -65,20 +64,17 @@ function updateUnionState(unionId, hasChildren) {
     if (!nodes.get(unionId)) return;
     
     if (hasChildren) {
-        // Show as Button
         nodes.update({
             id: unionId,
             label: '▼',
-            shape: 'circle', // Circle looks better as a button
+            shape: 'circle', 
             size: 15,
             color: { background: '#fff', border: '#444' },
             font: { size: 14, color: '#000', face: 'arial' },
             borderWidth: 1,
             isUnion: true,
-            fixed: true
         });
     } else {
-        // Show as simple Dot
         nodes.update({
             id: unionId,
             label: '',
@@ -88,7 +84,6 @@ function updateUnionState(unionId, hasChildren) {
             font: { size: 0 },
             borderWidth: 1,
             isUnion: true,
-            fixed: true
         });
     }
 }
@@ -106,17 +101,16 @@ function createUnionNode(p1Id, p2Id, childrenCount, x, y) {
       y: y,
       isUnion: true, 
       spouseIds: ids,
-      fixed: true
     });
 
     // 2. Connect Partners
+    // CHANGED: Increased length to 180 for "loosey" look
     edges.add([
-      { from: p1Id, to: unionId, color: '#666', width: 1.5 },
-      { from: p2Id, to: unionId, color: '#666', width: 1.5 }
+      { from: p1Id, to: unionId, color: '#666', width: 1.5, length: 180 },
+      { from: p2Id, to: unionId, color: '#666', width: 1.5, length: 180 }
     ]);
   }
   
-  // 3. Force Style Update
   updateUnionState(unionId, hasChildren);
   
   return unionId;
@@ -128,14 +122,19 @@ function addTriggerNode(parentId, type, count, x, y) {
   
   let label = '';
   let font = { size: 12, color: '#000' };
+  let color = { background: 'white', border: '#ccc' };
 
   if (type === 'children') {
-    return; // Handled by Union Node
+    return; 
   } else if (type === 'parents') {
     label = '▲'; 
     const parent = nodes.get(parentId);
-    x = parent.x;
-    y = parent.y - 35;
+    if(parent) { x = parent.x; y = parent.y - 35; }
+  } else if (type === 'spouses') {
+    label = '💍'; 
+    const parent = nodes.get(parentId);
+    if(parent) { x = parent.x + 30; y = parent.y - 30; }
+    color = { background: '#fff', border: '#FFD700' }; 
   }
 
   if (!nodes.get(triggerId)) {
@@ -143,15 +142,16 @@ function addTriggerNode(parentId, type, count, x, y) {
       id: triggerId,
       label: label,
       shape: 'box',
-      color: { background: 'white', border: '#ccc' },
+      color: color,
       font: font,
       x: x, 
       y: y,
       isTrigger: true,
       triggerType: type,
       parentId: parentId,
-      fixed: true
+      physics: false 
     });
+    window.activeTriggers.add(triggerId);
   }
 }
 
@@ -179,10 +179,8 @@ function expandChildren(unionId, childrenIds) {
         shape: 'box',
         x: currentX,
         y: startY,
-        fixed: true
       });
     }
-    // Check if edge exists
     if (!edges.get({ filter: e => e.from === unionId && e.to === child.id }).length) {
       newEdges.push({ from: unionId, to: child.id, arrows: 'to', color: '#666' });
     }
@@ -191,20 +189,16 @@ function expandChildren(unionId, childrenIds) {
 
   nodes.add(newNodes);
   edges.add(newEdges);
-  
-  // Update Union Node to 'Expanded' state (Dot)
   updateUnionState(unionId, false);
-
   fixOverlap(startY);
   childrenIds.forEach(c => expandNode(c.id, true));
 }
 
 function expandParents(childId, parents) {
   const childNode = nodes.get(childId);
-  const startY = childNode.y - 200;
+  const startY = childNode.y - 250; 
   let startX = childNode.x;
   
-  // GROUPING LOGIC
   const levelNodes = nodes.get({
     filter: n => Math.abs(n.y - startY) < 20 && n.x < startX
   });
@@ -234,7 +228,6 @@ function expandParents(childId, parents) {
         shape: 'box',
         x: startX + offset,
         y: startY,
-        fixed: true
       });
     }
   });
@@ -242,18 +235,74 @@ function expandParents(childId, parents) {
 
   if (parents.length === 2) {
     const unionY = startY + 60;
-    createUnionNode(parents[0].id, parents[1].id, 1, startX, unionY); // 1 child
+    createUnionNode(parents[0].id, parents[1].id, 1, startX, unionY); 
     
     const ids = [parents[0].id, parents[1].id].sort();
     const unionId = `union_${ids[0]}_${ids[1]}`;
-    edges.add({ from: unionId, to: childId, arrows: 'to', color: '#666' });
+    // CHANGED: Length 250 for extra slack
+    edges.add({ from: unionId, to: childId, arrows: 'to', color: '#666', length: 250 });
   } else if (parents.length === 1) {
-    edges.add({ from: parents[0].id, to: childId, arrows: 'to', color: '#666' });
+    // CHANGED: Length 250
+    edges.add({ from: parents[0].id, to: childId, arrows: 'to', color: '#666', length: 250 });
   }
 
-  nodes.remove(`trigger_parents_${childId}`);
+  const triggerId = `trigger_parents_${childId}`;
+  nodes.remove(triggerId);
+  window.activeTriggers.delete(triggerId);
+
   fixOverlap(startY);
   parents.forEach(p => expandNode(p.id, true));
+}
+
+function expandSpouses(nodeId) {
+  const data = window.familyCache[nodeId];
+  if(!data) return;
+
+  const node = nodes.get(nodeId);
+  const spouses = data.family.spouses;
+  const allChildren = data.family.children;
+
+  let spouseX = node.x + 160;
+  
+  spouses.forEach(spouse => {
+    if (!nodes.get(spouse.id)) {
+      nodes.add({
+        id: spouse.id,
+        label: wordwrap(spouse.label, 15),
+        color: { background: getGenderColor(spouse.gender), border: '#666' },
+        shape: 'box',
+        x: spouseX,
+        y: node.y,
+      });
+      expandNode(spouse.id, true);
+      spouseX += 160;
+    } else {
+        const existingNode = nodes.get(spouse.id);
+        spouseX = existingNode.x + 160;
+    }
+
+    const sNode = nodes.get(spouse.id);
+    const unionX = (node.x + sNode.x) / 2;
+    const unionY = node.y + 60;
+
+    const unionChildren = allChildren.filter(c => {
+        if (!c.otherParents || c.otherParents.length === 0) return false;
+        return c.otherParents.includes(spouse.id);
+    });
+    
+    const unionId = createUnionNode(data.id, spouse.id, unionChildren.length, unionX, unionY);
+    
+    if(unionChildren.length > 0) {
+        nodes.update({ id: unionId, childrenIds: unionChildren });
+        updateUnionState(unionId, true);
+    }
+  });
+
+  const triggerId = `trigger_spouses_${nodeId}`;
+  nodes.remove(triggerId);
+  window.activeTriggers.delete(triggerId);
+
+  fixOverlap(node.y);
 }
 
 function expandNode(id, isSilent = false) {
@@ -274,54 +323,9 @@ function expandNode(id, isSilent = false) {
     const node = nodes.get(data.id);
     if (!node) return;
 
-    // 1. Spouses & Unions
-    const spouses = data.family.spouses;
-    const allChildren = data.family.children;
-
-    if (spouses.length > 0) {
-      let spouseX = node.x + 160;
-      
-      spouses.forEach(spouse => {
-        if (!nodes.get(spouse.id)) {
-          nodes.add({
-            id: spouse.id,
-            label: wordwrap(spouse.label, 15),
-            color: { background: getGenderColor(spouse.gender), border: '#666' },
-            shape: 'box',
-            x: spouseX,
-            y: node.y,
-            fixed: true
-          });
-          expandNode(spouse.id, true);
-          spouseX += 160;
-        } else {
-           const existingNode = nodes.get(spouse.id);
-           spouseX = existingNode.x + 160;
-        }
-
-        const sNode = nodes.get(spouse.id);
-        const unionX = (node.x + sNode.x) / 2;
-        const unionY = node.y + 60;
-
-        // MATCH CHILDREN TO THIS COUPLE
-        // Robust matching check
-        const unionChildren = allChildren.filter(c => {
-           if (!c.otherParents || c.otherParents.length === 0) return false;
-           return c.otherParents.includes(spouse.id);
-        });
-        
-        const unionId = createUnionNode(data.id, spouse.id, unionChildren.length, unionX, unionY);
-        
-        // Attach data for click handler
-        if(unionChildren.length > 0) {
-           nodes.update({ id: unionId, childrenIds: unionChildren });
-           updateUnionState(unionId, true);
-        }
-      });
-      fixOverlap(node.y);
+    if (data.family.spouses.length > 0) {
+       addTriggerNode(data.id, 'spouses', data.family.spouses.length);
     }
-    
-    // 2. Parents
     if (data.family.parents.length > 0) {
       addTriggerNode(data.id, 'parents', data.family.parents.length);
     }
@@ -330,7 +334,6 @@ function expandNode(id, isSilent = false) {
   }).catch(err => { console.error(err); if(!isSilent) stopLoading(); });
 }
 
-// -- SIBLING LOGIC --
 window.showSiblingToggle = function(nodeId) {
   const node = nodes.get(nodeId);
   const data = window.familyCache[nodeId];
@@ -351,14 +354,17 @@ window.showSiblingToggle = function(nodeId) {
     isTrigger: true,
     triggerType: 'siblings',
     parentId: nodeId,
-    fixed: true
+    physics: false 
   });
+  window.activeTriggers.add(triggerId);
 };
 
 window.hideSiblingToggle = function(nodeId) {
   setTimeout(() => {
-    if (window.hoveredNodeId !== nodeId && window.hoveredNodeId !== `trigger_siblings_${nodeId}`) {
-      nodes.remove(`trigger_siblings_${nodeId}`);
+    const triggerId = `trigger_siblings_${nodeId}`;
+    if (window.hoveredNodeId !== nodeId && window.hoveredNodeId !== triggerId) {
+      nodes.remove(triggerId);
+      window.activeTriggers.delete(triggerId);
     }
   }, 200);
 };
@@ -379,8 +385,7 @@ window.toggleSiblings = function(nodeId) {
     const newNodes = [];
     const newEdges = [];
 
-    // Direction logic: Opposite to spouses
-    let direction = -1; // Default Left
+    let direction = -1; 
     const spouses = data.family.spouses || [];
     if (spouses.length > 0) {
        let spouseXTotal = 0;
@@ -410,7 +415,6 @@ window.toggleSiblings = function(nodeId) {
           shape: 'box',
           x: currentX,
           y: node.y,
-          fixed: true
         });
         
         if (parentUnionId) {
@@ -432,7 +436,6 @@ window.handleTriggerClick = function(nodeId) {
   const node = nodes.get(nodeId);
   if (!node) return;
 
-  // Handles Union Button Clicks
   if (node.isUnion) {
      if (node.childrenIds && node.childrenIds.length > 0) {
         expandChildren(nodeId, node.childrenIds);
@@ -449,5 +452,8 @@ window.handleTriggerClick = function(nodeId) {
      window.toggleSiblings(trigger.parentId);
      const isExpanded = window.siblingState[trigger.parentId];
      nodes.update({ id: nodeId, label: isExpanded ? 'Hide Siblings ><' : 'Siblings ><' });
+  }
+  else if (trigger.triggerType === 'spouses') {
+      expandSpouses(trigger.parentId);
   }
 };
