@@ -13,6 +13,9 @@ function recenterUnions(specificUnionIds = null) {
   
   const updates = [];
   unions.forEach(u => {
+     // Skip if fixed (frozen)
+     if (u.fixed) return; 
+
      if (specificUnionIds && !specificUnionIds.includes(u.id)) return;
 
      const p1 = nodes.get(u.spouseIds[0]);
@@ -53,6 +56,10 @@ window.applyTreeForces = function() {
         if(!n1 || !n2) return;
         if(n1.options.physics === false || n2.options.physics === false) return;
 
+        // Check if nodes are fixed (frozen)
+        const n1Fixed = n1.options.fixed === true || (n1.options.fixed && n1.options.fixed.x && n1.options.fixed.y);
+        const n2Fixed = n2.options.fixed === true || (n2.options.fixed && n2.options.fixed.x && n2.options.fixed.y);
+
         // 1. Spouse -> Union (Vertical Placement Logic)
         if (n2.options.isUnion && !n1.options.isUnion) {
             // Y Alignment: FORCE Union to be below Parent
@@ -62,8 +69,8 @@ window.applyTreeForces = function() {
             // Gentler correction force
             if (Math.abs(dy) > 2) {
                 const force = dy * 0.1; 
-                n1.y -= force * 0.5; 
-                n2.y += force * 0.5; 
+                if (!n1Fixed) n1.y -= force * 0.5; 
+                if (!n2Fixed) n2.y += force * 0.5; 
             }
             
             // X Cohesion (Relaxed)
@@ -73,8 +80,11 @@ window.applyTreeForces = function() {
             // Only pull if they drift WAY further than targetDist
             if (Math.abs(dx) > targetDist + 50) {
                  const pull = (Math.abs(dx) - (targetDist + 50)) * 0.02; 
-                 if (n1.x > n2.x) n1.x -= pull;
-                 else n1.x += pull;
+                 if (n1.x > n2.x) {
+                     if (!n1Fixed) n1.x -= pull;
+                 } else {
+                     if (!n1Fixed) n1.x += pull;
+                 }
             }
         }
 
@@ -92,8 +102,8 @@ window.applyTreeForces = function() {
                      const distMissing = TARGET_LEVEL_HEIGHT - currentYDiff;
                      const force = Math.min(distMissing * 0.05, 10); // Gentle push
                      
-                     n1.y -= force; 
-                     n2.y += force; 
+                     if (!n1Fixed) n1.y -= force; 
+                     if (!n2Fixed) n2.y += force; 
                  }
              }
         }
@@ -121,7 +131,7 @@ window.updateTriggerPositions = function() {
      if (type === 'parents') {
          newY = parent.y - 35;
      } else if (type === 'siblings') {
-         // CHANGED: Update physics tracker to new top-left position
+         // Update physics tracker to new top-left position
          newX = parent.x - 30;
          newY = parent.y - 30;
      } else if (type === 'spouses') {
@@ -214,6 +224,10 @@ function fixOverlap(yLevel) {
       
       for (let j = i + 1; j < nodesOnLevel.length; j++) {
         const targetId = nodesOnLevel[j].id;
+        
+        // Skip moving if the target node is fixed
+        if (nodesOnLevel[j].fixed) continue; 
+
         const existingUpdate = updates.find(u => u.id === targetId);
         const currentX = existingUpdate ? existingUpdate.x : nodesOnLevel[j].x;
         
