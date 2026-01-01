@@ -1,8 +1,9 @@
 /* global vis, bindNetwork, getNormalizedId, wordwrap, getGenderColor, noInputDetected, getItems, addItem, clearItems, unlockAll, expandNode, startLoading, stopLoading */
 
-let nodes;
-let edges;
-let network;
+// FIX: Use 'var' so these are globally accessible
+var nodes;
+var edges;
+var network;
 
 window.startpages = [];
 window.initialExpanded = false; 
@@ -42,8 +43,9 @@ const options = {
 
 nodes = new vis.DataSet();
 edges = new vis.DataSet();
-let data = { nodes, edges };
-let initialized = false;
+// Use 'var' for data as well to avoid block-scope issues
+var data = { nodes, edges };
+var initialized = false;
 
 function makeNetwork() {
   if (initialized) throw new Error('Network is already initialized');
@@ -128,4 +130,4 @@ function goRandom() {
   const ra = randomPeople[Math.floor(Math.random() * randomPeople.length)];
   addItem(cf, ra);
   go(); 
-} 
+}
