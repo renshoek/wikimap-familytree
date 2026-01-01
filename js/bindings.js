@@ -3,14 +3,13 @@
 
 let lastClickedNode = null;
 
-// FIX: Add missing functions to prevent crashes
 function traceBack(nodeId) {
-  // Placeholder: intended to highlight the path
+  // Placeholder
   console.log("Tracing back from:", nodeId);
 }
 
 function resetProperties() {
-  // Placeholder: intended to reset styles
+  // Placeholder
   console.log("Resetting properties");
 }
 
@@ -86,6 +85,12 @@ function bindNetwork() {
   // HOVER BINDINGS
   network.on('hoverNode', hoverNodeEvent);
   network.on('blurNode', blurNodeEvent);
+
+  // STICKY BUTTON UPDATE & CUSTOM GRAVITY
+  network.on('beforeDrawing', () => {
+    if(window.updateTriggerPositions) window.updateTriggerPositions();
+    if(window.applyTreeForces) window.applyTreeForces();
+  });
 }
 
 function bindSuggestions() {
@@ -127,7 +132,6 @@ function bind() {
 
   const submitButton = document.getElementById('submit');
   submitButton.addEventListener('click', () => {
-    // FIX: Check if shepherd is defined before accessing
     if(typeof shepherd !== 'undefined' && shepherd) shepherd.cancel(); 
     go();
   });
