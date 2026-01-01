@@ -121,7 +121,9 @@ window.updateTriggerPositions = function() {
      if (type === 'parents') {
          newY = parent.y - 35;
      } else if (type === 'siblings') {
-         newY = parent.y + 40;
+         // CHANGED: Update physics tracker to new top-left position
+         newX = parent.x - 30;
+         newY = parent.y - 30;
      } else if (type === 'spouses') {
          newX = parent.x + 40;
          newY = parent.y - 30;

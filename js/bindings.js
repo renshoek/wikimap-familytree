@@ -37,24 +37,6 @@ function clickEvent(params) {
   }
 }
 
-// Hover Event for Siblings
-function hoverNodeEvent(params) {
-  const nodeId = params.node;
-  window.hoveredNodeId = nodeId;
-  
-  const node = nodes.get(nodeId);
-  // Only show trigger for actual people (not triggers or unions)
-  if (node && !node.isTrigger && !node.isUnion) {
-    if (window.showSiblingToggle) window.showSiblingToggle(nodeId);
-  }
-}
-
-function blurNodeEvent(params) {
-  const nodeId = params.node;
-  if (window.hoveredNodeId === nodeId) window.hoveredNodeId = null;
-  if (window.hideSiblingToggle) window.hideSiblingToggle(nodeId);
-}
-
 function openPageForId(nodeId) {
   const node = nodes.get(nodeId);
   if (node && !node.isTrigger && !node.isUnion) {
@@ -82,10 +64,6 @@ function bindNetwork() {
     if (params.nodes.length) openPageForId(params.nodes[0]);
   });
   
-  // HOVER BINDINGS
-  network.on('hoverNode', hoverNodeEvent);
-  network.on('blurNode', blurNodeEvent);
-
   // STICKY BUTTON UPDATE & CUSTOM GRAVITY
   network.on('beforeDrawing', () => {
     if(window.updateTriggerPositions) window.updateTriggerPositions();
