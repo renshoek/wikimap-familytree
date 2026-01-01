@@ -1,4 +1,4 @@
-/* global nodes, edges, getNormalizedId, wordwrap, unwrap, getSubPages, startLoading, stopLoading, fixOverlap, addTriggerNode, recenterUnions, animateNodes */
+/* global nodes, edges, network, getNormalizedId, wordwrap, unwrap, getSubPages, startLoading, stopLoading, fixOverlap, addTriggerNode, recenterUnions, animateNodes */
 
 // GLOBAL STATE
 window.familyCache = {}; 
@@ -18,6 +18,31 @@ const COLORS = {
 
 function getGenderColor(gender) {
   return COLORS[gender] || COLORS.unknown;
+}
+
+// -- HELPER: Get True Position --
+function getPosition(nodeId) {
+  try {
+    const positions = network.getPositions([nodeId]);
+    if (positions && positions[nodeId]) {
+      return positions[nodeId];
+    }
+  } catch (e) {
+    // Fallback
+  }
+  const node = nodes.get(nodeId);
+  return node ? { x: node.x, y: node.y } : { x: 0, y: 0 };
+}
+
+// -- HELPER: Lock Node Temporarily --
+function lockNodeTemporarily(nodeId, ms = 5000) {
+  if (!nodes.get(nodeId)) return;
+  nodes.update({ id: nodeId, fixed: true });
+  setTimeout(() => {
+    if (nodes.get(nodeId)) {
+        nodes.update({ id: nodeId, fixed: false });
+    }
+  }, ms);
 }
 
 // -- DATA & NODE MANAGEMENT --
@@ -116,24 +141,36 @@ function createUnionNode(p1Id, p2Id, childrenCount, x, y) {
 }
 
 function addTriggerNode(parentId, type, count, x, y) {
-  if (count === 0) return;
   const triggerId = `trigger_${type}_${parentId}`;
   
   let label = '';
+  let icon = '';
   let font = { size: 12, color: '#000' };
   let color = { background: 'white', border: '#ccc' };
+
+  const parentPos = getPosition(parentId);
 
   if (type === 'children') {
     return; 
   } else if (type === 'parents') {
-    label = '▲'; 
-    const parent = nodes.get(parentId);
-    if(parent) { x = parent.x; y = parent.y - 35; }
+    icon = '▲'; 
+    if(parentPos) { x = parentPos.x; y = parentPos.y - 35; }
   } else if (type === 'spouses') {
-    label = '💍'; 
-    const parent = nodes.get(parentId);
-    if(parent) { x = parent.x + 30; y = parent.y - 30; }
+    icon = '💍'; 
+    if(parentPos) { x = parentPos.x + 30; y = parentPos.y - 30; }
     color = { background: '#fff', border: '#FFD700' }; 
+  } else if (type === 'siblings') {
+    icon = '⇄';
+    if(parentPos) { x = parentPos.x - 30; y = parentPos.y - 30; }
+    font = { size: 12, color: '#000' };
+    color = { background: '#fff', border: '#888' };
+  }
+
+  // Add number if count is provided and > 0 (and not parents/children which don't request it)
+  if (type !== 'parents' && type !== 'children' && typeof count === 'number' && count > 0) {
+      label = count + '\n' + icon;
+  } else {
+      label = icon;
   }
 
   if (!nodes.get(triggerId)) {
@@ -157,11 +194,13 @@ function addTriggerNode(parentId, type, count, x, y) {
 // -- LOGIC --
 
 function expandChildren(unionId, childrenIds) {
-  const unionNode = nodes.get(unionId);
-  if (!unionNode || !childrenIds || childrenIds.length === 0) return;
+  lockNodeTemporarily(unionId);
 
-  const startY = unionNode.y + 150; 
-  const startX = unionNode.x;
+  const pos = getPosition(unionId);
+  if (!pos || !childrenIds || childrenIds.length === 0) return;
+
+  const startY = pos.y + 150; 
+  const startX = pos.x;
 
   const newNodes = [];
   const newEdges = [];
@@ -172,17 +211,15 @@ function expandChildren(unionId, childrenIds) {
 
   childrenIds.forEach(child => {
     if (!nodes.get(child.id)) {
-      // START at source position (unionNode) with Size 0
       newNodes.push({
         id: child.id,
         label: wordwrap(child.label, 15),
         color: { background: getGenderColor(child.gender), border: '#666' },
         shape: 'box',
-        font: { size: 0 }, // Start tiny
-        x: unionNode.x, 
-        y: unionNode.y,
+        font: { size: 0 }, 
+        x: pos.x, 
+        y: pos.y, 
       });
-      // ANIMATE to target position and Size 14
       animationTargets.push({ id: child.id, x: currentX, y: startY, fontSize: 14 });
     }
     if (!edges.get({ filter: e => e.from === unionId && e.to === child.id }).length) {
@@ -195,10 +232,8 @@ function expandChildren(unionId, childrenIds) {
   edges.add(newEdges);
   updateUnionState(unionId, false);
   
-  // Trigger animation
   if (animationTargets.length > 0) {
       if(window.animateNodes) window.animateNodes(animationTargets);
-      // Run fixOverlap AFTER animation so it doesn't try to fix nodes stacked at source
       setTimeout(() => { if(window.fixOverlap) window.fixOverlap(startY); }, 650);
   } else {
       if(window.fixOverlap) window.fixOverlap(startY);
@@ -208,11 +243,13 @@ function expandChildren(unionId, childrenIds) {
 }
 
 function expandParents(childId, parents) {
-  const childNode = nodes.get(childId);
-  const startY = childNode.y - 250; 
-  let startX = childNode.x;
+  lockNodeTemporarily(childId);
+
+  const pos = getPosition(childId);
   
-  // Logic to shift child if space is needed
+  const startY = pos.y - 250; 
+  let startX = pos.x;
+  
   const levelNodes = nodes.get({
     filter: n => Math.abs(n.y - startY) < 20 && n.x < startX
   });
@@ -223,8 +260,7 @@ function expandParents(childId, parents) {
     if (myLeftMostX < rightMostX + padding) {
       const shift = (rightMostX + padding) - myLeftMostX;
       startX += shift;
-      // We don't animate the child shift here to keep it simple
-      nodes.update({ id: childId, x: childNode.x + shift });
+      nodes.update({ id: childId, x: pos.x + shift });
       if (typeof window.recenterUnions === 'function') window.recenterUnions();
     }
   }
@@ -242,22 +278,19 @@ function expandParents(childId, parents) {
         label: wordwrap(p.label, 15),
         color: { background: getGenderColor(p.gender), border: '#666' },
         shape: 'box',
-        font: { size: 0 }, // Start tiny
-        x: childNode.x,    // Start at child (growing Up)
-        y: childNode.y,
+        font: { size: 0 }, 
+        x: pos.x,    
+        y: pos.y,
       });
       animationTargets.push({ id: p.id, x: targetX, y: startY, fontSize: 14 });
     }
   });
   nodes.add(newNodes);
 
-  // Handle Union creation and animation
   if (parents.length === 2) {
     const unionY = startY + 60;
     const unionId = createUnionNode(parents[0].id, parents[1].id, 1, startX, unionY);
-    
-    // Snap union to child and animate up
-    nodes.update({ id: unionId, x: childNode.x, y: childNode.y }); 
+    nodes.update({ id: unionId, x: pos.x, y: pos.y }); 
     animationTargets.push({ id: unionId, x: startX, y: unionY });
 
     const ids = [parents[0].id, parents[1].id].sort();
@@ -284,11 +317,14 @@ function expandSpouses(nodeId) {
   const data = window.familyCache[nodeId];
   if(!data) return;
 
-  const node = nodes.get(nodeId);
+  lockNodeTemporarily(nodeId);
+
+  const pos = getPosition(nodeId);
+
   const spouses = data.family.spouses;
   const allChildren = data.family.children;
 
-  let spouseX = node.x + 160;
+  let spouseX = pos.x + 160;
   const animationTargets = [];
   
   spouses.forEach(spouse => {
@@ -300,24 +336,23 @@ function expandSpouses(nodeId) {
         label: wordwrap(spouse.label, 15),
         color: { background: getGenderColor(spouse.gender), border: '#666' },
         shape: 'box',
-        font: { size: 0 }, // Start tiny
-        x: node.x,         // Start at source (growing Side)
-        y: node.y,
+        font: { size: 0 }, 
+        x: pos.x,         
+        y: pos.y,
       });
-      animationTargets.push({ id: spouse.id, x: targetX, y: node.y, fontSize: 14 });
+      animationTargets.push({ id: spouse.id, x: targetX, y: pos.y, fontSize: 14 });
       
       expandNode(spouse.id, true);
       spouseX += 160;
     } else {
-        const existingNode = nodes.get(spouse.id);
-        targetX = existingNode.x;
-        spouseX = existingNode.x + 160;
+        const spousePos = getPosition(spouse.id);
+        targetX = spousePos.x;
+        spouseX = spousePos.x + 160;
     }
 
-    // Calc union position
-    const finalSpouseX = (nodes.get(spouse.id) ? (animationTargets.find(t=>t.id===spouse.id)?.x || nodes.get(spouse.id).x) : targetX);
-    const unionX = (node.x + finalSpouseX) / 2;
-    const unionY = node.y + 60;
+    const finalSpouseX = (nodes.get(spouse.id) ? (animationTargets.find(t=>t.id===spouse.id)?.x || getPosition(spouse.id).x) : targetX);
+    const unionX = (pos.x + finalSpouseX) / 2;
+    const unionY = pos.y + 60;
 
     const unionChildren = allChildren.filter(c => {
         if (!c.otherParents || c.otherParents.length === 0) return false;
@@ -325,9 +360,7 @@ function expandSpouses(nodeId) {
     });
     
     const unionId = createUnionNode(data.id, spouse.id, unionChildren.length, unionX, unionY);
-    
-    // Snap union to source and animate
-    nodes.update({ id: unionId, x: node.x, y: node.y });
+    nodes.update({ id: unionId, x: pos.x, y: pos.y });
     animationTargets.push({ id: unionId, x: unionX, y: unionY });
     
     if(unionChildren.length > 0) {
@@ -342,9 +375,9 @@ function expandSpouses(nodeId) {
 
   if (animationTargets.length > 0) {
       if(window.animateNodes) window.animateNodes(animationTargets);
-      setTimeout(() => { if(window.fixOverlap) window.fixOverlap(node.y); }, 650);
+      setTimeout(() => { if(window.fixOverlap) window.fixOverlap(pos.y); }, 650);
   } else {
-      if(window.fixOverlap) window.fixOverlap(node.y);
+      if(window.fixOverlap) window.fixOverlap(pos.y);
   }
 }
 
@@ -366,59 +399,41 @@ function expandNode(id, isSilent = false) {
     const node = nodes.get(data.id);
     if (!node) return;
 
+    // Handle Spouses: Count unshown, and skip if 1 already shown.
     if (data.family.spouses.length > 0) {
-       addTriggerNode(data.id, 'spouses', data.family.spouses.length);
+       const unshownSpouses = data.family.spouses.filter(s => !nodes.get(s.id)).length;
+       const hideSpouseTrigger = (data.family.spouses.length === 1 && unshownSpouses === 0);
+       
+       if (!hideSpouseTrigger) {
+           addTriggerNode(data.id, 'spouses', unshownSpouses);
+       }
     }
+
+    // Handle Parents (no numbers requested)
     if (data.family.parents.length > 0) {
-      addTriggerNode(data.id, 'parents', data.family.parents.length);
+      addTriggerNode(data.id, 'parents', null);
+    }
+
+    // Handle Siblings: Count unshown
+    if (data.family.siblings && data.family.siblings.length > 0) {
+      const unshownSiblings = data.family.siblings.filter(s => !nodes.get(s.id)).length;
+      addTriggerNode(data.id, 'siblings', unshownSiblings);
     }
 
     if (!isSilent) stopLoading();
   }).catch(err => { console.error(err); if(!isSilent) stopLoading(); });
 }
 
-window.showSiblingToggle = function(nodeId) {
-  const node = nodes.get(nodeId);
-  const data = window.familyCache[nodeId];
-  if (!data || !data.family.siblings || data.family.siblings.length === 0) return;
-  
-  const triggerId = `trigger_siblings_${nodeId}`;
-  if (nodes.get(triggerId)) return; 
-
-  const isExpanded = window.siblingState[nodeId];
-  nodes.add({
-    id: triggerId,
-    label: isExpanded ? 'Hide Siblings ><' : 'Siblings ><',
-    shape: 'box',
-    color: { background: '#fff', border: '#888' },
-    font: { size: 10, color: '#555' },
-    x: node.x,
-    y: node.y + 40,
-    isTrigger: true,
-    triggerType: 'siblings',
-    parentId: nodeId,
-    physics: false 
-  });
-  window.activeTriggers.add(triggerId);
-};
-
-window.hideSiblingToggle = function(nodeId) {
-  setTimeout(() => {
-    const triggerId = `trigger_siblings_${nodeId}`;
-    if (window.hoveredNodeId !== nodeId && window.hoveredNodeId !== triggerId) {
-      nodes.remove(triggerId);
-      window.activeTriggers.delete(triggerId);
-    }
-  }, 200);
-};
-
 window.toggleSiblings = function(nodeId) {
   const data = window.familyCache[nodeId];
   if (!data) return;
+
+  lockNodeTemporarily(nodeId);
   
   const siblings = data.family.siblings;
   const isExpanded = window.siblingState[nodeId];
   const node = nodes.get(nodeId);
+  const pos = getPosition(nodeId);
 
   if (isExpanded) {
     const ids = siblings.map(s => s.id).filter(id => id !== nodeId);
@@ -433,14 +448,17 @@ window.toggleSiblings = function(nodeId) {
     const spouses = data.family.spouses || [];
     if (spouses.length > 0) {
        let spouseXTotal = 0;
-       spouses.forEach(s => { const n = nodes.get(s.id); if(n) spouseXTotal+=n.x; });
+       spouses.forEach(s => { 
+           const p = getPosition(s.id); 
+           if(p) spouseXTotal += p.x; 
+       });
        const avg = spouseXTotal / spouses.length;
-       if (avg < node.x) direction = 1; 
+       if (avg < pos.x) direction = 1; 
        else direction = -1;
     }
     
     const spacing = direction * 160;
-    let currentX = node.x + spacing;
+    let currentX = pos.x + spacing;
     
     let parentUnionId = null;
     if (data.family.parents && data.family.parents.length === 2) {
@@ -457,12 +475,12 @@ window.toggleSiblings = function(nodeId) {
           label: wordwrap(sib.label, 15),
           color: { background: getGenderColor(sib.gender), border: '#666' },
           shape: 'box',
-          font: { size: 0 }, // Start tiny
-          x: node.x,         // Start at source (growing Side)
-          y: node.y,
+          font: { size: 0 }, 
+          x: pos.x,         
+          y: pos.y,
         });
         
-        animationTargets.push({ id: sib.id, x: currentX, y: node.y, fontSize: 14 });
+        animationTargets.push({ id: sib.id, x: currentX, y: pos.y, fontSize: 14 });
         
         if (parentUnionId) {
             newEdges.push({ from: parentUnionId, to: sib.id, arrows: 'to', color: '#666' });
@@ -477,9 +495,9 @@ window.toggleSiblings = function(nodeId) {
     
     if (animationTargets.length > 0) {
         if(window.animateNodes) window.animateNodes(animationTargets);
-        setTimeout(() => { if(window.fixOverlap) window.fixOverlap(node.y); }, 650);
+        setTimeout(() => { if(window.fixOverlap) window.fixOverlap(pos.y); }, 650);
     } else {
-        if(window.fixOverlap) window.fixOverlap(node.y);
+        if(window.fixOverlap) window.fixOverlap(pos.y);
     }
 
     window.siblingState[nodeId] = true;
@@ -505,7 +523,16 @@ window.handleTriggerClick = function(nodeId) {
   else if (trigger.triggerType === 'siblings') {
      window.toggleSiblings(trigger.parentId);
      const isExpanded = window.siblingState[trigger.parentId];
-     nodes.update({ id: nodeId, label: isExpanded ? 'Hide Siblings ><' : 'Siblings ><' });
+     
+     // Update label: if Expanded -> '✕', if Collapsed -> 'count\n⇄'
+     let label = '✕';
+     if (!isExpanded) {
+        const data = window.familyCache[trigger.parentId];
+        // We just collapsed, so calculate unshown count (should be all)
+        const unshown = data.family.siblings.filter(s => !nodes.get(s.id)).length;
+        label = (unshown > 0 ? unshown + '\n' : '') + '⇄';
+     }
+     nodes.update({ id: nodeId, label: label });
   }
   else if (trigger.triggerType === 'spouses') {
       expandSpouses(trigger.parentId);
