@@ -3,7 +3,7 @@
 // CONFIGURATION
 const SPACING_X = 160; 
 const SPACING_Y = 220; 
-const UNION_OFFSET_Y = 60;
+const UNION_OFFSET_Y = 60; // Vertical distance from Parent to Union
 const MIN_NODE_GAP = 20; 
 
 // -- HELPER: RECENTER UNIONS --
@@ -19,9 +19,16 @@ function recenterUnions(specificUnionIds = null) {
      const p2 = nodes.get(u.spouseIds[1]);
      
      if (p1 && p2) {
+       // Center X between parents
        const midX = (p1.x + p2.x) / 2;
-       if (Math.abs(u.x - midX) > 1) {
-         updates.push({ id: u.id, x: midX });
+       
+       // Enforce Y position: strictly below parents
+       // We take the average Y of parents + OFFSET
+       const targetY = ((p1.y + p2.y) / 2) + UNION_OFFSET_Y;
+
+       // Relaxed threshold (2px) so it doesn't jitter
+       if (Math.abs(u.x - midX) > 2 || Math.abs(u.y - targetY) > 2) {
+         updates.push({ id: u.id, x: midX, y: targetY });
        }
      }
   });
@@ -37,8 +44,8 @@ window.applyTreeForces = function() {
     const nodesBody = network.body.nodes;
     const edgesBody = network.body.edges;
     
-    // CHANGED: Increased target height (matching 250 length)
-    const TARGET_LEVEL_HEIGHT = 230; 
+    // Target height for Child levels
+    const TARGET_LEVEL_HEIGHT = 280; // Increased to match longer springs
 
     Object.values(edgesBody).forEach(edge => {
         const n1 = nodesBody[edge.fromId];
@@ -47,24 +54,26 @@ window.applyTreeForces = function() {
         if(!n1 || !n2) return;
         if(n1.options.physics === false || n2.options.physics === false) return;
 
-        // 1. Spouse -> Union (Horizontal Alignment & Cohesion)
+        // 1. Spouse -> Union (Vertical Placement Logic)
         if (n2.options.isUnion && !n1.options.isUnion) {
-            // Y Alignment
-            const dy = n1.y - n2.y;
-            if (Math.abs(dy) > 1) {
-                const force = dy * 0.1; 
-                n1.y -= force; 
-                n2.y += force; 
+            // Y Alignment: FORCE Union to be below Parent
+            const targetY = n1.y + UNION_OFFSET_Y;
+            const dy = targetY - n2.y;
+            
+            // Gentler correction force
+            if (Math.abs(dy) > 2) {
+                const force = dy * 0.1; // Reduced from 0.3 for smoother movement
+                n1.y -= force * 0.5; 
+                n2.y += force * 0.5; 
             }
             
-            // X Cohesion
-            // CHANGED: targetDist 150 (since edge length is 180)
+            // X Cohesion (Relaxed)
             const dx = n1.x - n2.x;
-            const targetDist = 150; 
+            const targetDist = 120; 
             
-            // Only pull if they drift further than targetDist
-            if (Math.abs(dx) > targetDist + 20) {
-                 const pull = (Math.abs(dx) - targetDist) * 0.05;
+            // Only pull if they drift WAY further than targetDist
+            if (Math.abs(dx) > targetDist + 50) {
+                 const pull = (Math.abs(dx) - (targetDist + 50)) * 0.02; // Very weak horizontal pull
                  if (n1.x > n2.x) n1.x -= pull;
                  else n1.x += pull;
             }
@@ -78,10 +87,11 @@ window.applyTreeForces = function() {
 
              if (isParentChild) {
                  const currentYDiff = n2.y - n1.y; 
-                 // If Child is above Parent or too close
+                 
+                 // Push down if too close
                  if (currentYDiff < TARGET_LEVEL_HEIGHT) {
                      const distMissing = TARGET_LEVEL_HEIGHT - currentYDiff;
-                     const force = Math.min(distMissing * 0.08, 10); 
+                     const force = Math.min(distMissing * 0.05, 10); // Gentle push
                      
                      n1.y -= force; 
                      n2.y += force; 
