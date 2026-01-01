@@ -3,10 +3,13 @@ const isTouchDevice = 'd' in document.documentElement;
 
 // Create the Shepherd tour
 
+// FIX: 'buttons' might be null if the element isn't in HTML.
+// We will check for existence before using it later.
 const buttons = document.getElementById('buttons');
 const formbox = document.getElementById('formbox');
 
-const shepherd = new Shepherd.Tour({
+// CHANGED: const -> var so it is globally accessible
+var shepherd = new Shepherd.Tour({
   defaults: {
     classes: 'shepherd-theme-arrows',
     showCancelLink: true,
@@ -103,16 +106,18 @@ shepherd.addStep({
 shepherd.on('start', () => {
   document.getElementById('container').style.opacity = 0.3;
   document.getElementById('container').style.pointerEvents = 'none';
-  formbox.style.opacity = 0.3;
-  buttons.style.opacity = 0.3;
+  if (formbox) formbox.style.opacity = 0.3;
+  // FIX: Check if buttons exists before accessing style
+  if (buttons) buttons.style.opacity = 0.3;
 });
 
 // ... and bring it back when the tour goes away
 function opaque() {
   document.getElementById('container').style.opacity = '';
   document.getElementById('container').style.pointerEvents = '';
-  formbox.style.opacity = 1;
-  buttons.style.opacity = 1;
+  if (formbox) formbox.style.opacity = 1;
+  // FIX: Check if buttons exists before accessing style
+  if (buttons) buttons.style.opacity = 1;
 }
 shepherd.on('complete', () => {
   opaque();
@@ -123,6 +128,7 @@ shepherd.on('cancel', opaque);
 // Prompt user for input when none detected
 function noInputDetected() {
   document.getElementById('container').style.opacity = 0.3;
-  buttons.style.opacity = 0.3;
+  // FIX: Check if buttons exists
+  if (buttons) buttons.style.opacity = 0.3;
   shepherd.show();
 }
