@@ -157,11 +157,13 @@ function addTriggerNode(parentId, type, count, x, y) {
     if(parentPos) { x = parentPos.x; y = parentPos.y - 35; }
   } else if (type === 'spouses') {
     icon = '💍'; 
-    if(parentPos) { x = parentPos.x + 30; y = parentPos.y - 30; }
+    // Side: Right
+    if(parentPos) { x = parentPos.x + 75; y = parentPos.y; }
     color = { background: '#fff', border: '#FFD700' }; 
   } else if (type === 'siblings') {
     icon = '⇄';
-    if(parentPos) { x = parentPos.x - 30; y = parentPos.y - 30; }
+    // Side: Left
+    if(parentPos) { x = parentPos.x - 75; y = parentPos.y; }
     font = { size: 12, color: '#000' };
     color = { background: '#fff', border: '#888' };
   }
@@ -443,6 +445,8 @@ window.toggleSiblings = function(nodeId) {
     const newNodes = [];
     const newEdges = [];
     const animationTargets = [];
+    // Track new nodes to expand them immediately
+    const siblingsToExpand = [];
 
     let direction = -1; 
     const spouses = data.family.spouses || [];
@@ -481,6 +485,7 @@ window.toggleSiblings = function(nodeId) {
         });
         
         animationTargets.push({ id: sib.id, x: currentX, y: pos.y, fontSize: 14 });
+        siblingsToExpand.push(sib.id); // Track ID
         
         if (parentUnionId) {
             newEdges.push({ from: parentUnionId, to: sib.id, arrows: 'to', color: '#666' });
@@ -499,6 +504,9 @@ window.toggleSiblings = function(nodeId) {
     } else {
         if(window.fixOverlap) window.fixOverlap(pos.y);
     }
+    
+    // Auto-expand the newly shown siblings so their buttons appear
+    siblingsToExpand.forEach(id => expandNode(id, true));
 
     window.siblingState[nodeId] = true;
   }
