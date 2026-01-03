@@ -159,4 +159,27 @@ async function getSubPages(pageName) {
   }
 }
 
+async function getPageById(id, label) {
+  try {
+    const family = await getFamilyData(id);
+    const gender = await getEntityGender(id);
+
+    return {
+      redirectedTo: label, 
+      id: id,
+      gender: gender,
+      family: family,             
+      links: [] 
+    };
+  } catch (err) {
+    console.error(err);
+    return {
+      redirectedTo: label,
+      family: { parents: [], children: [], siblings: [], spouses: [] },
+      links: []
+    };
+  }
+}
+
 window.getSubPages = getSubPages;
+window.getPageById = getPageById;
