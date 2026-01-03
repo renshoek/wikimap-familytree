@@ -1,4 +1,4 @@
-/* global nodes, edges, network, getNormalizedId, wordwrap, unwrap, getSubPages, startLoading, stopLoading, fixOverlap, addTriggerNode, recenterUnions, animateNodes */
+/* global nodes, edges, network, getNormalizedId, wordwrap, unwrap, getSubPages, getPageById, startLoading, stopLoading, fixOverlap, addTriggerNode, recenterUnions, animateNodes */
 
 // GLOBAL STATE
 window.familyCache = {}; 
@@ -391,10 +391,20 @@ function expandNode(id, isSilent = false) {
   else {
     const node = nodes.get(id);
     if (!node) { stopLoading(); return; }
-    promise = getSubPages(unwrap(node.label)).then(data => {
-      const finalId = renameNode(id, data.redirectedTo, data.id, data.gender);
-      data.id = finalId; window.familyCache[finalId] = data; return data;
-    });
+
+    // MODIFIED: Check if ID is a valid Wikidata QID (e.g. Q42)
+    // If it is, use getPageById to avoid ambiguous name searches.
+    if (/^Q\d+$/.test(id)) {
+        promise = getPageById(id, unwrap(node.label)).then(data => {
+            const finalId = renameNode(id, data.redirectedTo, data.id, data.gender);
+            data.id = finalId; window.familyCache[finalId] = data; return data;
+        });
+    } else {
+        promise = getSubPages(unwrap(node.label)).then(data => {
+            const finalId = renameNode(id, data.redirectedTo, data.id, data.gender);
+            data.id = finalId; window.familyCache[finalId] = data; return data;
+        });
+    }
   }
 
   promise.then(data => {
