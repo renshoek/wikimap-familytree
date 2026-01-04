@@ -1,4 +1,4 @@
-/* global vis, nodes, edges, resetNetworkFromJson, getEdgeColor, getColor, getNormalizedId */ // eslint-disable-line max-len
+/* global vis, nodes, edges, getEdgeColor, getColor, getNormalizedId */ // eslint-disable-line max-len
 // Functions for the serialization of a vis.js network. This allows for storing
 // a network as JSON and then loading it back later.
 
@@ -150,6 +150,73 @@ function loadGraph(id) {
     .then(r => r.json())
     .then(resetNetworkFromJson);
 }
+
+// -- EXPORT / IMPORT --
+
+function exportTree() {
+  const json = networkToJson();
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "family_tree.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function resetNetworkFromJson(data) {
+  // Parses the JSON structure using the helper above
+  const formatted = networkFromJson(data);
+
+  // Clear existing Vis DataSets
+  nodes.clear();
+  edges.clear();
+
+  // Populate with imported data
+  nodes.add(formatted.nodes.get());
+  edges.add(formatted.edges.get());
+
+  // Restore Global State
+  if (formatted.startpages) {
+    window.startpages = formatted.startpages;
+  }
+  
+  // Center view
+  if (typeof network !== 'undefined' && network) network.fit();
+}
+
+function importTree() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const json = JSON.parse(evt.target.result);
+        resetNetworkFromJson(json);
+      } catch (err) {
+        alert("Error importing file: " + err.message);
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  input.click();
+}
+
+// Expose globals
+window.exportTree = exportTree;
+window.importTree = importTree;
+window.resetNetworkFromJson = resetNetworkFromJson;
 
 
 // DEBUGGING FUNCTIONS //
