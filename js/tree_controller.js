@@ -35,7 +35,7 @@ function getPosition(nodeId) {
 }
 
 // -- HELPER: Lock Node Temporarily --
-function lockNodeTemporarily(nodeId, ms = 5000) {
+function lockNodeTemporarily(nodeId, ms = 2000) {
   if (!nodes.get(nodeId)) return;
   nodes.update({ id: nodeId, fixed: true });
   setTimeout(() => {
@@ -390,7 +390,7 @@ function expandNode(id, isSilent = false) {
   if (window.familyCache[id]) promise = Promise.resolve(window.familyCache[id]);
   else {
     const node = nodes.get(id);
-    if (!node) { stopLoading(); return; }
+    if (!node) { stopLoading(); return Promise.resolve(null); }
 
     // MODIFIED: Check if ID is a valid Wikidata QID (e.g. Q42)
     // If it is, use getPageById to avoid ambiguous name searches.
@@ -407,9 +407,11 @@ function expandNode(id, isSilent = false) {
     }
   }
 
-  promise.then(data => {
+  // MODIFIED: Return the promise chain so we can use the data after it resolves
+  return promise.then(data => {
+    if (!data) return null;
     const node = nodes.get(data.id);
-    if (!node) return;
+    if (!node) return data;
 
     // Handle Spouses: Count unshown, and skip if 1 already shown.
     if (data.family.spouses.length > 0) {
@@ -433,7 +435,12 @@ function expandNode(id, isSilent = false) {
     }
 
     if (!isSilent) stopLoading();
-  }).catch(err => { console.error(err); if(!isSilent) stopLoading(); });
+    return data; // Return data for next chain
+  }).catch(err => { 
+      console.error(err); 
+      if(!isSilent) stopLoading();
+      return null;
+  });
 }
 
 window.toggleSiblings = function(nodeId) {
@@ -474,12 +481,9 @@ window.toggleSiblings = function(nodeId) {
     const spacing = direction * 160;
     let currentX = pos.x + spacing;
     
-    let parentUnionId = null;
-    if (data.family.parents && data.family.parents.length === 2) {
-         const ids = [data.family.parents[0].id, data.family.parents[1].id].sort();
-         const attemptId = `union_${ids[0]}_${ids[1]}`;
-         if (nodes.get(attemptId)) parentUnionId = attemptId;
-    }
+    // Check if main node's parents are currently visible
+    const mainNodeParents = data.family.parents || [];
+    const parentsVisible = mainNodeParents.length > 0 && mainNodeParents.every(p => nodes.get(p.id));
 
     siblings.forEach(sib => {
       if (sib.id === nodeId) return;
@@ -497,11 +501,11 @@ window.toggleSiblings = function(nodeId) {
         animationTargets.push({ id: sib.id, x: currentX, y: pos.y, fontSize: 14 });
         siblingsToExpand.push(sib.id); // Track ID
         
-        if (parentUnionId) {
-            newEdges.push({ from: parentUnionId, to: sib.id, arrows: 'to', color: '#666' });
-        } else {
-            newEdges.push({ from: nodeId, to: sib.id, color: '#ccc', dashes: true });
-        }
+        // Always add the dashed sibling line
+        newEdges.push({ from: nodeId, to: sib.id, color: '#ccc', dashes: true });
+        
+        // Note: We NO LONGER blindly add an edge to the parent union here.
+        // We wait for data to load so we can connect to the *correct* parents.
       }
       currentX += spacing;
     });
@@ -516,7 +520,18 @@ window.toggleSiblings = function(nodeId) {
     }
     
     // Auto-expand the newly shown siblings so their buttons appear
-    siblingsToExpand.forEach(id => expandNode(id, true));
+    // AND connect to parents if main node's parents are visible
+    siblingsToExpand.forEach(id => {
+        expandNode(id, true).then(sibData => {
+            // Check if we should connect to parents
+            if (parentsVisible && sibData && sibData.family && sibData.family.parents.length > 0) {
+                // Use the sibling's OWN parent data to ensure correct connections 
+                // (This handles half-siblings correctly)
+                // Use sibData.id because the node might have been renamed/redirected
+                expandParents(sibData.id, sibData.family.parents);
+            }
+        });
+    });
 
     window.siblingState[nodeId] = true;
   }
