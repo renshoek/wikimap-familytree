@@ -112,3 +112,68 @@ a:hover {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* == DEBUG PANEL STYLES == */
+.debug-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 10px; /* MOVED TO LEFT */
+  z-index: 1000;
+  background-color: rgba(0,0,0,0.7);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+.debug-btn:hover {
+  background-color: rgba(0,0,0,0.9);
+}
+
+.debug-panel {
+  position: fixed;
+  bottom: 10px;
+  left: 10px; /* MOVED TO LEFT */
+  width: 260px;
+  background-color: rgba(0,0,0,0.85);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  z-index: 1001;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #555;
+  padding-bottom: 5px;
+  font-weight: bold;
+}
+
+.debug-section {
+  margin-bottom: 8px;
+}
+
+.debug-section label {
+  display: block;
+  margin-bottom: 2px;
+  color: #ccc;
+}
+
+.debug-section input {
+  width: 100%;
+}
+
+.debug-section span {
+  display: block;
+  text-align: right;
+  color: #4CAF50;
+  font-weight: bold;
+}
