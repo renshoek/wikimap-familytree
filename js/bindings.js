@@ -51,7 +51,11 @@ function globalKeyHandler(e) {
   const key = e.key.toLowerCase();
   
   if (key === 'd' || key === 'delete' || key === 'backspace') {
-    if (lastClickedNode) {
+    const selected = network.getSelectedNodes();
+    if (selected.length > 0) {
+       nodes.remove(selected);
+       network.unselectAll();
+    } else if (lastClickedNode) {
        nodes.remove(lastClickedNode);
        lastClickedNode = null;
     }
@@ -68,6 +72,24 @@ function bindNetwork() {
   network.on('beforeDrawing', () => {
     if(window.updateTriggerPositions) window.updateTriggerPositions();
     if(window.applyTreeForces) window.applyTreeForces();
+  });
+
+  // VISUAL PIN INDICATOR
+  network.on('afterDrawing', (ctx) => {
+    const allNodes = nodes.get();
+    allNodes.forEach(n => {
+       // Check if node is fixed (pinned)
+       if (n.fixed === true || (n.fixed && n.fixed.x && n.fixed.y)) {
+           const pos = network.getPositions([n.id])[n.id];
+           if (pos) {
+               ctx.font = "20px Arial";
+               ctx.fillStyle = "red";
+               ctx.textAlign = "center";
+               // Draw pin emoji at top right of node
+               ctx.fillText("📌", pos.x + 20, pos.y - 15);
+           }
+       }
+    });
   });
 }
 
@@ -104,8 +126,64 @@ function bindSuggestions() {
   if (refreshBtn) refreshBtn.addEventListener('click', renderSuggestions);
 }
 
+function bindActionButtons() {
+  // 1. DELETE NODE
+  const btnDelete = document.getElementById('btn-delete');
+  if (btnDelete) {
+    btnDelete.addEventListener('click', () => {
+        const selected = network.getSelectedNodes();
+        if (selected.length > 0) {
+            nodes.remove(selected);
+            network.unselectAll();
+        } else {
+            alert("Please select a node to delete.");
+        }
+    });
+  }
+
+  // 2. PIN / UNPIN NODE
+  const btnPin = document.getElementById('btn-pin');
+  if (btnPin) {
+    btnPin.addEventListener('click', () => {
+        const selected = network.getSelectedNodes();
+        if (selected.length > 0) {
+            const updates = selected.map(id => {
+                const node = nodes.get(id);
+                // Check if currently fully fixed
+                const isFixed = node.fixed === true || (node.fixed && node.fixed.x && node.fixed.y);
+                return { id: id, fixed: !isFixed };
+            });
+            nodes.update(updates);
+        } else {
+            alert("Please select a node to pin/unpin.");
+        }
+    });
+  }
+
+  // 3. TOGGLE PHYSICS
+  const btnPhysics = document.getElementById('btn-physics');
+  if (btnPhysics) {
+    let physicsOn = true;
+    btnPhysics.addEventListener('click', () => {
+        physicsOn = !physicsOn;
+        network.setOptions({ physics: { enabled: physicsOn } });
+        
+        // Update Icon
+        const icon = btnPhysics.querySelector('i');
+        if (physicsOn) {
+            icon.className = 'icon ion-ios-pause';
+            btnPhysics.title = "Pause Physics";
+        } else {
+            icon.className = 'icon ion-ios-play';
+            btnPhysics.title = "Resume Physics";
+        }
+    });
+  }
+}
+
 function bind() {
   bindSuggestions();
+  bindActionButtons(); // Bind the new bottom-right buttons
   document.addEventListener('keydown', globalKeyHandler);
 
   const submitButton = document.getElementById('submit');

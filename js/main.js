@@ -10,6 +10,9 @@ window.initialExpanded = false;
 
 const container = document.getElementById('container');
 
+// Detect touch device (using a different variable name than help.js to avoid conflicts)
+const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+
 const options = {
   nodes: {
     shape: 'box', 
@@ -28,7 +31,7 @@ const options = {
     color: { color: '#666666', highlight: '#000000' }
   },
   interaction: {
-    hover: true,
+    hover: !isTouch, // Disable hover on touch devices to prevent navigation locking
     dragNodes: true, 
     zoomView: true,
     dragView: true
