@@ -50,10 +50,60 @@
     </div>
   </div>
 
+  <button id="debug-trigger" class="debug-btn">Debug Physics</button>
+
+  <div id="debug-panel" class="debug-panel" style="display: none;">
+    <div class="debug-header">
+        <span>Physics Debugger</span>
+        <button id="debug-close" style="background:none; border:none; color:white; font-weight:bold; cursor:pointer;">X</button>
+    </div>
+    
+    <div class="debug-section">
+        <label>Gravitational Constant (Repulsion)</label>
+        <input type="range" id="opt-gravity" min="-10000" max="-100" step="100">
+        <span id="val-gravity"></span>
+    </div>
+
+    <div class="debug-section">
+        <label>Central Gravity (Pull to Center)</label>
+        <input type="range" id="opt-central" min="0" max="1" step="0.01">
+        <span id="val-central"></span>
+    </div>
+
+    <div class="debug-section">
+        <label>Spring Length</label>
+        <input type="range" id="opt-springlen" min="50" max="500" step="10">
+        <span id="val-springlen"></span>
+    </div>
+
+    <div class="debug-section">
+        <label>Spring Constant (Stiffness)</label>
+        <input type="range" id="opt-springstiff" min="0.001" max="0.2" step="0.001">
+        <span id="val-springstiff"></span>
+    </div>
+
+    <div class="debug-section">
+        <label>Damping (Friction)</label>
+        <input type="range" id="opt-damping" min="0" max="1" step="0.01">
+        <span id="val-damping"></span>
+    </div>
+
+    <div class="debug-section" style="border-top: 1px solid #555; padding-top:10px; margin-top:5px;">
+        <label style="color: #ff9;">Layout: Vertical Height</label>
+        <input type="range" id="opt-layout-height" min="100" max="400" step="10">
+        <span id="val-layout-height"></span>
+    </div>
+
+    <div style="margin-top: 15px; text-align: center;">
+        <button id="debug-reset" style="background: #d9534f; border:none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Reset to Defaults</button>
+    </div>
+  </div>
+
   <div class="button-container">
     <button id="btn-physics" title="Toggle Physics (On/Off)"><i class="icon ion-ios-pause"></i></button>
     <button id="btn-pin" title="Pin/Unpin Selected Node"><i class="icon ion-pin"></i></button>
     <button id="btn-delete" title="Delete Selected Node"><i class="icon ion-trash-b"></i></button>
+    <button id="btn-settings" title="Settings"><i class="icon ion-gear-a"></i></button>
   </div>
 
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"> </script>
@@ -63,6 +113,9 @@
 
   <script type="text/javascript" src="./js/wikidata_service.js"></script>
   <script type="text/javascript" src="./js/layout.js"></script>
+  
+  <script type="text/javascript" src="./js/tree_utils.js"></script>
+  <script type="text/javascript" src="./js/tree_elements.js"></script>
   <script type="text/javascript" src="./js/tree_controller.js"></script>
   
   <script type="text/javascript" src="./js/helpers.js"> </script>
