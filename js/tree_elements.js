@@ -2,40 +2,52 @@
 
 // -- VISUAL BUILDERS --
 
-function updateUnionState(unionId, hasChildren) {
+function updateUnionState(unionId, state) {
     if (!nodes.get(unionId)) return;
     
-    if (hasChildren) {
-        // Show as a button (▼) if it has children to expand
-        nodes.update({
-            id: unionId,
-            label: '▼',
-            shape: 'circle', 
-            size: 15,
-            color: { background: '#fff', border: '#444' },
-            font: { size: 14, color: '#000', face: 'arial' },
-            borderWidth: 1,
-            isUnion: true,
-        });
-    } else {
-        // Show as a simple dot if just a connector
-        nodes.update({
-            id: unionId,
-            label: '',
-            shape: 'dot',
-            size: 5,
-            color: window.COLORS.union,
-            font: { size: 0 },
-            borderWidth: 1,
-            isUnion: true,
-        });
-    }
+    let label = '';
+    let shape = 'dot';
+    let size = 5;
+    let color = window.COLORS ? window.COLORS.union : '#444';
+    let fontSize = 0;
+
+    // state can be:
+    // 1. Number (count) -> Collapsed, show count.
+    // 2. 'expanded'     -> Expanded, show '✕'.
+    // 3. false/null     -> Empty/Hidden (dot).
+
+    if (typeof state === 'number' && state > 0) {
+        // COLLAPSED with children: Show Count
+        label = state.toString();
+        shape = 'circle';
+        size = 15;
+        color = { background: '#fff', border: '#444' };
+        fontSize = 14;
+    } else if (state === 'expanded') {
+        // EXPANDED: Show Close Button
+        label = '✕'; 
+        shape = 'circle'; 
+        size = 15;
+        color = { background: '#fff', border: '#444' }; 
+        fontSize = 14;
+    } 
+    // If state is 0 or false, stay as dot (connector only).
+
+    nodes.update({
+        id: unionId,
+        label: label,
+        shape: shape,
+        size: size,
+        color: color,
+        font: { size: fontSize, color: '#000', face: 'arial' },
+        borderWidth: 1,
+        isUnion: true,
+    });
 }
 
 function createUnionNode(p1Id, p2Id, childrenCount, x, y) {
   const ids = [p1Id, p2Id].sort();
   const unionId = `union_${ids[0]}_${ids[1]}`;
-  const hasChildren = childrenCount > 0;
 
   if (!nodes.get(unionId)) {
     // 1. Create Basic Node
@@ -48,14 +60,31 @@ function createUnionNode(p1Id, p2Id, childrenCount, x, y) {
     });
 
     // 2. Connect Partners to the Union
-    // REMOVED hardcoded length: 180
     edges.add([
       { from: p1Id, to: unionId, color: '#666', width: 1.5 },
       { from: p2Id, to: unionId, color: '#666', width: 1.5 }
     ]);
+    
+    // 3. Bind spouses physically (invisible edge)
+    const spouseEdgeId = `spouse_bind_${ids[0]}_${ids[1]}`;
+    if (!edges.get(spouseEdgeId)) {
+        edges.add({
+            id: spouseEdgeId,
+            from: p1Id,
+            to: p2Id,
+            color: { opacity: 0 }, 
+            physics: true,         
+            length: 100,           
+            width: 0,
+            smooth: false,
+            dashes: false,
+            hidden: false          
+        });
+    }
   }
   
-  updateUnionState(unionId, hasChildren);
+  // Show the number immediately (Collapsed State)
+  updateUnionState(unionId, childrenCount);
   
   return unionId;
 }
@@ -75,20 +104,18 @@ function addTriggerNode(parentId, type, count, x, y) {
   } else if (type === 'parents') {
     icon = '▲'; 
     if(parentPos) { x = parentPos.x; y = parentPos.y - 35; }
+    color = { background: 'rgba(255, 255, 255, 0.2)', border: '#ccc' };
   } else if (type === 'spouses') {
     icon = '💍'; 
-    // Side: Right
     if(parentPos) { x = parentPos.x + 75; y = parentPos.y; }
     color = { background: '#fff', border: '#FFD700' }; 
   } else if (type === 'siblings') {
     icon = '⇄';
-    // Side: Left
     if(parentPos) { x = parentPos.x - 75; y = parentPos.y; }
     font = { size: 12, color: '#000' };
     color = { background: '#fff', border: '#888' };
   }
 
-  // Add number if count is provided and > 0 (and not parents/children which don't request it)
   if (type !== 'parents' && type !== 'children' && typeof count === 'number' && count > 0) {
       label = count + '\n' + icon;
   } else {

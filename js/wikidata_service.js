@@ -136,6 +136,59 @@ async function getEntityGender(qid) {
   return 'unknown';
 }
 
+// NEW: Fetch detailed biographical info for the Modal
+async function getPersonDetails(qid) {
+  // UPDATED QUERY: Now fetches Country (P17) for Birth/Death places
+  const query = `
+    SELECT ?desc ?dob ?dod ?pobLabel ?podLabel ?pobCountryLabel ?podCountryLabel ?img ?article ?entityLabel ?entityDescription WHERE {
+      BIND(wd:${qid} AS ?entity)
+      
+      OPTIONAL { ?entity wdt:P569 ?dob . }
+      OPTIONAL { ?entity wdt:P570 ?dod . }
+      
+      OPTIONAL { 
+        ?entity wdt:P19 ?pob . 
+        OPTIONAL { ?pob wdt:P17 ?pobCountry . }
+      }
+      
+      OPTIONAL { 
+        ?entity wdt:P20 ?pod . 
+        OPTIONAL { ?pod wdt:P17 ?podCountry . }
+      }
+      
+      OPTIONAL { ?entity wdt:P18 ?img . }
+      
+      OPTIONAL {
+        ?article schema:about ?entity ;
+                 schema:isPartOf <https://en.wikipedia.org/> .
+      }
+      
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    } LIMIT 1
+  `;
+
+  const url = `${WD_SPARQL}?query=${encodeURIComponent(query)}&format=json`;
+  const data = await fetchJson(url);
+  
+  if (data.results && data.results.bindings.length > 0) {
+      const row = data.results.bindings[0];
+      return {
+          id: qid,
+          label: row.entityLabel ? row.entityLabel.value : qid,
+          description: row.entityDescription ? row.entityDescription.value : '',
+          birthDate: row.dob ? new Date(row.dob.value).toLocaleDateString() : null,
+          deathDate: row.dod ? new Date(row.dod.value).toLocaleDateString() : null,
+          birthPlace: row.pobLabel ? row.pobLabel.value : null,
+          birthCountry: row.pobCountryLabel ? row.pobCountryLabel.value : null, // Added
+          deathPlace: row.podLabel ? row.podLabel.value : null,
+          deathCountry: row.podCountryLabel ? row.podCountryLabel.value : null, // Added
+          image: row.img ? row.img.value : null,
+          wikipedia: row.article ? row.article.value : null
+      };
+  }
+  return null;
+}
+
 async function getSubPages(pageName) {
   try {
     const entity = await searchEntity(pageName);
@@ -183,3 +236,4 @@ async function getPageById(id, label) {
 
 window.getSubPages = getSubPages;
 window.getPageById = getPageById;
+window.getPersonDetails = getPersonDetails; // Export

@@ -6,6 +6,29 @@ window.siblingState = {};
 window.hoveredNodeId = null;
 window.activeTriggers = new Set(); 
 
+// NEW: Track nodes that are currently fetching data
+window.loadingNodes = new Set();
+let spinnerLoopActive = false;
+
+window.startSpinnerLoop = function() {
+    if (spinnerLoopActive) return;
+    spinnerLoopActive = true;
+    
+    function step() {
+        if (window.loadingNodes.size === 0) {
+            spinnerLoopActive = false;
+            // Force one last redraw to clear spinners
+            if (typeof network !== 'undefined' && network) network.redraw();
+            return; 
+        }
+        if (typeof network !== 'undefined' && network) {
+            network.redraw(); // Force canvas update for animation
+        }
+        requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+};
+
 // -- CONSTANTS --
 window.COLORS = {
   male: '#ADD8E6',   
@@ -38,17 +61,33 @@ function getPosition(nodeId) {
 }
 
 // Lock Node Temporarily to prevent it flying away during expansion
-function lockNodeTemporarily(nodeId, ms = 2000) {
+function lockNodeTemporarily(nodeId, ms = 3000) {
   if (!nodes.get(nodeId)) return;
+  
+  // 1. Pin the node (Visual Lock)
   nodes.update({ id: nodeId, fixed: true });
+
+  // 2. Schedule Unpin after 3 seconds
   setTimeout(() => {
     if (nodes.get(nodeId)) {
         nodes.update({ id: nodeId, fixed: false });
     }
   }, ms);
+
+  // 3. Keep Physics Engine Awake (System Lock)
+  const physicsDuration = 60000; // 60 seconds
+  const start = Date.now();
+  
+  const interval = setInterval(() => {
+    if (Date.now() - start > physicsDuration) {
+        clearInterval(interval);
+        return;
+    }
+    if (network) network.startSimulation();
+  }, 500);
 }
 
-// Rename a node (used when we switch from a search term to a real Wikidata label)
+// Rename a node
 function renameNode(oldId, newName, newQid, gender) {
   const oldNode = nodes.get(oldId);
   const newId = newQid || getNormalizedId(newName);
@@ -61,7 +100,6 @@ function renameNode(oldId, newName, newQid, gender) {
 
   if (newId !== oldId) {
     if (nodes.get(newId)) {
-      // If the new ID already exists, merge/replace
       nodes.remove(oldId); 
       const moves = [];
       edges.get().forEach(e => {
@@ -70,7 +108,6 @@ function renameNode(oldId, newName, newQid, gender) {
       });
       edges.update(moves);
     } else {
-      // Update ID by removing and re-adding
       nodes.remove(oldId);
       nodes.add({ ...oldNode, ...updateData });
       const moves = [];
@@ -82,7 +119,6 @@ function renameNode(oldId, newName, newQid, gender) {
     }
     return newId;
   } else {
-    // Just update properties
     nodes.update(updateData);
     return oldId;
   }

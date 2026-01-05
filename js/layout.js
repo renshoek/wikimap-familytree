@@ -1,16 +1,11 @@
 /* global nodes, network, updateNodeValue */
 
-// -- GLOBAL LAYOUT CONFIGURATION --
-// We expose these to window.LAYOUT so the debug panel can edit them in real-time.
-window.LAYOUT = {
-    SPACING_X: 160,
-    SPACING_Y: 220,
-    UNION_OFFSET_Y: 60,    // Vertical distance from Parent to Union
-    MIN_NODE_GAP: 20,
-    TARGET_LEVEL_HEIGHT: 200, // Vertical distance between generations
-    HARD_MIN_Y_GAP: 40,    // Minimum gap to prevent overlap
-    RECENTER_STRENGTH: 0.1 // How strongly parents align with children
-};
+// CONFIGURATION
+const SPACING_X = 160; 
+const SPACING_Y = 220; 
+const UNION_OFFSET_Y = 60; // Vertical distance from Parent to Union
+const MIN_NODE_GAP = 20; 
+const BASE_EDGE_LENGTH = 300; 
 
 // -- HELPER: RECENTER UNIONS --
 function recenterUnions(specificUnionIds = null) {
@@ -19,17 +14,19 @@ function recenterUnions(specificUnionIds = null) {
   
   const updates = [];
   unions.forEach(u => {
-     if (u.fixed) return; 
-
      if (specificUnionIds && !specificUnionIds.includes(u.id)) return;
 
      const p1 = nodes.get(u.spouseIds[0]);
      const p2 = nodes.get(u.spouseIds[1]);
      
      if (p1 && p2) {
+       // Center X between parents
        const midX = (p1.x + p2.x) / 2;
-       const targetY = ((p1.y + p2.y) / 2) + window.LAYOUT.UNION_OFFSET_Y;
+       
+       // Enforce Y position: strictly below parents
+       const targetY = ((p1.y + p2.y) / 2) + UNION_OFFSET_Y;
 
+       // Relaxed threshold to prevent jitter
        if (Math.abs(u.x - midX) > 2 || Math.abs(u.y - targetY) > 2) {
          updates.push({ id: u.id, x: midX, y: targetY });
        }
@@ -47,68 +44,143 @@ window.applyTreeForces = function() {
     const nodesBody = network.body.nodes;
     const edgesBody = network.body.edges;
     
-    const { TARGET_LEVEL_HEIGHT, HARD_MIN_Y_GAP, UNION_OFFSET_Y } = window.LAYOUT;
+    // Target height for Child levels
+    const TARGET_LEVEL_HEIGHT = 280; 
 
+    // 1. GLOBAL STABILIZER (Stop Infinite Drift on X and Y)
+    // Calculate average position of the system
+    let totalX = 0;
+    let totalY = 0;
+    let nodeCount = 0;
+    const nodeIds = Object.keys(nodesBody);
+    
+    for (let i = 0; i < nodeIds.length; i++) {
+        const node = nodesBody[nodeIds[i]];
+        // Only count real nodes
+        if (node.options.physics !== false) {
+            totalX += node.x;
+            totalY += node.y;
+            nodeCount++;
+        }
+    }
+
+    if (nodeCount > 0) {
+        const avgX = totalX / nodeCount;
+        const avgY = totalY / nodeCount;
+        
+        // Apply gentle centering force
+        const driftForceX = -avgX * 0.05; 
+        const driftForceY = -avgY * 0.05; 
+        
+        for (let i = 0; i < nodeIds.length; i++) {
+            const node = nodesBody[nodeIds[i]];
+            if (node.options.physics !== false) {
+                node.x += driftForceX;
+                node.y += driftForceY;
+            }
+        }
+    }
+
+    // 2. EDGE FORCES
     Object.values(edgesBody).forEach(edge => {
+        // UPDATED: Ignore sibling edges (physics: false) in custom calculations
+        if (edge.options.physics === false) return;
+
         const n1 = nodesBody[edge.fromId];
         const n2 = nodesBody[edge.toId];
         
         if(!n1 || !n2) return;
         if(n1.options.physics === false || n2.options.physics === false) return;
 
-        const n1Fixed = n1.options.fixed === true || (n1.options.fixed && n1.options.fixed.x && n1.options.fixed.y);
-        const n2Fixed = n2.options.fixed === true || (n2.options.fixed && n2.options.fixed.x && n2.options.fixed.y);
+        // -- DYNAMIC MAX LENGTH & STIFFNESS --
+        const dx = n1.x - n2.x;
+        const dy = n1.y - n2.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        // Calculate "Crowdedness" (Degree)
+        const d1 = n1.edges ? n1.edges.length : 1;
+        const d2 = n2.edges ? n2.edges.length : 1;
+        const maxDegree = Math.max(d1, d2);
 
-        // 1. Spouse -> Union
-        if (n2.options.isUnion && !n1.options.isUnion) {
-            if (n2.y < n1.y + UNION_OFFSET_Y) {
-               const needed = (n1.y + UNION_OFFSET_Y) - n2.y;
-               if (!n2Fixed && !n1Fixed) {
-                   n1.y -= needed * 0.5; 
-                   n2.y += needed * 0.5; 
-                   n1.vy = 0; n2.vy = 0; 
-               } else if (!n2Fixed) {
-                   n2.y += needed; n2.vy = 0;
-               } else if (!n1Fixed) {
-                   n1.y -= needed; n1.vy = 0;
-               }
+        // A. Dynamic Limit: Base + 25px per extra connection
+        const dynamicLimit = BASE_EDGE_LENGTH + (maxDegree * 25);
+
+        // B. Dynamic Stiffness: Crowded nodes have "stretchier" leashes
+        const dynamicStiffness = Math.max(0.1, 0.6 - (maxDegree * 0.03));
+        
+        if (dist > dynamicLimit) {
+            const diff = dist - dynamicLimit;
+            const correction = diff * dynamicStiffness; 
+            
+            const angle = Math.atan2(dy, dx);
+            const cx = Math.cos(angle) * correction;
+            const cy = Math.sin(angle) * correction;
+            
+            // Asymmetric Correction (Anti-Lift)
+            let n1Scale = 0.5;
+            let n2Scale = 0.5;
+
+            // Check vertical relationship
+            if (n1.y < n2.y) {
+                 // n1 is above n2 (e.g. Parent is above Child)
+                 // Pull n1 (Parent) down heavily. Anchor n2 (Child).
+                 n1Scale = 0.95;
+                 n2Scale = 0.05;
+            } else {
+                 // n2 is above n1
+                 // Pull n2 down heavily. Anchor n1.
+                 n1Scale = 0.05;
+                 n2Scale = 0.95;
             }
 
-            // X Cohesion
+            n1.x -= cx * n1Scale;
+            n1.y -= cy * n1Scale;
+            n2.x += cx * n2Scale;
+            n2.y += cy * n2Scale;
+        }
+
+        // 3. Spouse -> Union (Vertical Placement Logic)
+        if (n2.options.isUnion && !n1.options.isUnion) {
+            // Y Alignment: FORCE Union to be below Parent
+            const targetY = n1.y + UNION_OFFSET_Y;
+            const dy = targetY - n2.y;
+            
+            // Gentler correction force
+            if (Math.abs(dy) > 2) {
+                const force = dy * 0.1; 
+                n1.y -= force * 0.5; 
+                n2.y += force * 0.5; 
+            }
+            
+            // X Cohesion (Relaxed)
             const dx = n1.x - n2.x;
-            const targetDist = 100;
-            if (Math.abs(dx) > targetDist) {
-                 const pull = (Math.abs(dx) - targetDist) * 0.08; 
-                 if (n1.x > n2.x) { if (!n1Fixed) n1.x -= pull; } 
-                 else { if (!n1Fixed) n1.x += pull; }
+            const targetDist = 120; 
+            
+            // Only pull if they drift WAY further than targetDist
+            if (Math.abs(dx) > targetDist + 50) {
+                 const pull = (Math.abs(dx) - (targetDist + 50)) * 0.02; 
+                 if (n1.x > n2.x) n1.x -= pull;
+                 else n1.x += pull;
             }
         }
 
-        // 2. Parent -> Child
+        // 4. Vertical Separation (Parent/Union -> Child)
         else {
              let isParentChild = false;
              if (n1.options.isUnion && !n2.options.isUnion) isParentChild = true;
              else if (!n1.options.isUnion && !n2.options.isUnion && edge.options.arrows === 'to') isParentChild = true;
 
              if (isParentChild) {
-                 if (n2.y < n1.y + HARD_MIN_Y_GAP) {
-                     const diff = (n1.y + HARD_MIN_Y_GAP) - n2.y;
-                     if (!n1Fixed && !n2Fixed) {
-                         n1.y -= diff * 0.5; n2.y += diff * 0.5;
-                         n1.vy = 0; n2.vy = 0;
-                     } else if (!n2Fixed) {
-                         n2.y += diff; n2.vy = 0;
-                     } else if (!n1Fixed) {
-                         n1.y -= diff; n1.vy = 0;
-                     }
-                 }
-
                  const currentYDiff = n2.y - n1.y; 
+                 
+                 // Push down if too close
                  if (currentYDiff < TARGET_LEVEL_HEIGHT) {
                      const distMissing = TARGET_LEVEL_HEIGHT - currentYDiff;
-                     const force = Math.min(distMissing * 0.05, 10); 
-                     if (!n1Fixed) n1.y -= force; 
-                     if (!n2Fixed) n2.y += force; 
+                     const force = Math.min(distMissing * 0.05, 10); // Gentle push
+                     
+                     // Distribute force evenly to maintain structure
+                     n1.y -= force; 
+                     n2.y += force; 
                  }
              }
         }
@@ -122,8 +194,10 @@ window.updateTriggerPositions = function() {
   window.activeTriggers.forEach(triggerId => {
      const trigger = network.body.nodes[triggerId];
      if (!trigger) return; 
+
      const parentId = trigger.options.parentId;
      if (!parentId) return;
+
      const parent = network.body.nodes[parentId];
      if (!parent) return;
 
@@ -131,9 +205,15 @@ window.updateTriggerPositions = function() {
      let newY = parent.y;
      const type = trigger.options.triggerType;
 
-     if (type === 'parents') newY = parent.y - 35;
-     else if (type === 'siblings') { newX = parent.x - 75; newY = parent.y; }
-     else if (type === 'spouses') { newX = parent.x + 75; newY = parent.y; }
+     if (type === 'parents') {
+         newY = parent.y - 35;
+     } else if (type === 'siblings') {
+         newX = parent.x - 30;
+         newY = parent.y - 30;
+     } else if (type === 'spouses') {
+         newX = parent.x + 40;
+         newY = parent.y - 30;
+     }
 
      trigger.x = newX;
      trigger.y = newY;
@@ -158,20 +238,23 @@ function animateNodes(updates) {
 
   function step(time) {
     const progress = Math.min((time - start) / duration, 1);
-    const ease = 1 - Math.pow(1 - progress, 3); 
+    const ease = 1 - Math.pow(1 - progress, 3); // Cubic Ease Out
     
     const frameUpdates = updates.map(u => {
       const init = initialPositions[u.id];
       if (!init) return null;
+      
       const updateObj = {
         id: u.id,
         x: init.x + (u.x - init.x) * ease,
         y: init.y + (u.y - init.y) * ease
       };
+
       if (u.fontSize !== undefined) {
           const currentSize = init.fontSize + (u.fontSize - init.fontSize) * ease;
           updateObj.font = { size: currentSize };
       }
+
       return updateObj;
     }).filter(n => n);
 
@@ -179,47 +262,64 @@ function animateNodes(updates) {
       nodes.update(frameUpdates);
       recenterUnions();
     }
-    if (progress < 1) requestAnimationFrame(step);
+
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    }
   }
   requestAnimationFrame(step);
 }
 
 function fixOverlap(yLevel) {
   const tolerance = 20; 
-  const nodesOnLevel = nodes.get({ filter: n => Math.abs(n.y - yLevel) < tolerance });
+  const nodesOnLevel = nodes.get({
+    filter: n => Math.abs(n.y - yLevel) < tolerance
+  });
+
   if (nodesOnLevel.length < 2) return;
+
   nodesOnLevel.sort((a, b) => a.x - b.x);
 
   const updates = [];
   let didMove = false;
-  const MIN_NODE_GAP = window.LAYOUT.MIN_NODE_GAP;
 
   for (let i = 0; i < nodesOnLevel.length - 1; i++) {
     const leftNode = nodesOnLevel[i];
     const rightNode = nodesOnLevel[i+1];
+
     const leftW = (leftNode.isUnion || leftNode.isTrigger) ? 30 : 160;
     const rightW = (rightNode.isUnion || rightNode.isTrigger) ? 30 : 160;
+
     const minGap = (leftW/2 + rightW/2) + MIN_NODE_GAP;
     const currentDist = rightNode.x - leftNode.x;
 
     if (currentDist < minGap) {
       const pushDistance = minGap - currentDist;
+      
       for (let j = i + 1; j < nodesOnLevel.length; j++) {
         const targetId = nodesOnLevel[j].id;
-        if (nodesOnLevel[j].fixed) continue; 
         const existingUpdate = updates.find(u => u.id === targetId);
         const currentX = existingUpdate ? existingUpdate.x : nodesOnLevel[j].x;
+        
         const newX = currentX + pushDistance;
-        if(existingUpdate) existingUpdate.x = newX;
-        else updates.push({ id: targetId, x: newX, y: nodesOnLevel[j].y });
+
+        if(existingUpdate) {
+            existingUpdate.x = newX;
+        } else {
+            updates.push({ id: targetId, x: newX, y: nodesOnLevel[j].y });
+        }
       }
       didMove = true;
     }
   }
 
-  if (didMove) animateNodes(updates);
-  else recenterUnions();
+  if (didMove) {
+    animateNodes(updates);
+  } else {
+    recenterUnions();
+  }
 }
 
+// EXPORTS
 window.animateNodes = animateNodes;
 window.fixOverlap = fixOverlap;

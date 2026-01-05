@@ -36,21 +36,52 @@
 
   <div id="container" class="fullscreen">
     <div id="info" class="transparent-blur">
-      <h1>Family Tree Visualizer</h1>
-      <p>Explore family connections.</p>
-      <div class="controls-guide">
-        <ul>
-          <li><strong>Parents (▲):</strong> Click to show ancestors.</li>
-          <li><strong>Children (▼):</strong> Click the union point between partners.</li>
-          <li><strong>Siblings (><):</strong> Hover over a person to see toggle.</li>
-        </ul>
+      <h1 style="font-size: 2.2em; margin-bottom: 10px;">Interactive Family Tree</h1>
+      <p style="font-size: 1.1em; color: #444; margin-bottom: 25px;">
+        Visualize ancestry and genealogy using real-time data from Wikidata.
+      </p>
+      
+      <div class="controls-guide" style="text-align: left; background: rgba(255,255,255,0.7); padding: 15px 20px; border-radius: 8px; border: 1px solid #ddd; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        
+        <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; text-transform: uppercase; font-size: 0.85em; color: #666; letter-spacing: 1px;">How to Navigate</h4>
+            <ul style="margin: 0; padding-left: 0; list-style: none;">
+              <li style="margin-bottom: 8px; display: flex; align-items: center;">
+                <span style="background: rgba(255, 255, 255, 0.2); border: 1px solid #ccc; border-radius: 3px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 12px;">▲</span>
+                <span><strong>Ancestors:</strong> Click the arrow above a person to load parents.</span>
+              </li>
+              <li style="margin-bottom: 8px; display: flex; align-items: center;">
+                <span style="background: #fff; border: 1px solid #FFD700; border-radius: 3px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px;">💍</span>
+                <span><strong>Spouses:</strong> Click the ring to load partners.</span>
+              </li>
+              <li style="margin-bottom: 8px; display: flex; align-items: center;">
+                <span style="background: #fff; border: 1px solid #444; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-weight: bold; font-size: 12px;">3</span>
+                <span><strong>Descendants:</strong> Click the numbered circle between partners.</span>
+              </li>
+              <li style="display: flex; align-items: center;">
+                <span style="background: #fff; border: 1px solid #888; border-radius: 3px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px;">⇄</span>
+                <span><strong>Siblings:</strong> Toggle siblings by hovering over a node.</span>
+              </li>
+            </ul>
+        </div>
+
+        <div>
+            <h4 style="margin: 0 0 10px 0; text-transform: uppercase; font-size: 0.85em; color: #666; letter-spacing: 1px;">Action Toolbar (Bottom Right)</h4>
+            <ul style="margin: 0; padding-left: 0; list-style: none;">
+                <li style="margin-bottom: 5px;"><i class="icon ion-information-circled" style="width: 20px; text-align:center;"></i> <strong>Info:</strong> Select a person to view bio & details.</li>
+                <li style="margin-bottom: 5px;"><i class="icon ion-pin" style="width: 20px; text-align:center;"></i> <strong>Pin:</strong> Lock a node in position.</li>
+                <li><i class="icon ion-trash-b" style="width: 20px; text-align:center;"></i> <strong>Delete:</strong> Remove selected node(s).</li>
+            </ul>
+        </div>
+
       </div>
-      <h3>Suggested People <i id="refresh-suggestions" class="icon ion-refresh" style="cursor: pointer;"></i></h3>
+
+      <h3 style="border-bottom: none; margin-top: 30px; font-weight: normal; color: #555;">Try a famous figure:</h3>
       <div id="suggestions" class="suggestion-grid"></div>
     </div>
   </div>
 
-  <button id="debug-trigger" class="debug-btn">Debug Physics</button>
+  <button id="debug-trigger" class="debug-btn" title="Debug Physics"><i class="icon ion-bug"></i></button>
 
   <div id="debug-panel" class="debug-panel" style="display: none;">
     <div class="debug-header">
@@ -65,7 +96,7 @@
     </div>
 
     <div class="debug-section">
-        <label>Central Gravity (Pull to Center)</label>
+        <label>Central Gravity</label>
         <input type="range" id="opt-central" min="0" max="1" step="0.01">
         <span id="val-central"></span>
     </div>
@@ -75,33 +106,28 @@
         <input type="range" id="opt-springlen" min="50" max="500" step="10">
         <span id="val-springlen"></span>
     </div>
-
+    
     <div class="debug-section">
-        <label>Spring Constant (Stiffness)</label>
-        <input type="range" id="opt-springstiff" min="0.001" max="0.2" step="0.001">
-        <span id="val-springstiff"></span>
+        <label>Spring Stiffness (Flexibility)</label>
+        <input type="range" id="opt-springk" min="0.001" max="0.1" step="0.001">
+        <span id="val-springk"></span>
     </div>
 
     <div class="debug-section">
-        <label>Damping (Friction)</label>
+        <label>Damping</label>
         <input type="range" id="opt-damping" min="0" max="1" step="0.01">
         <span id="val-damping"></span>
     </div>
 
-    <div class="debug-section" style="border-top: 1px solid #555; padding-top:10px; margin-top:5px;">
-        <label style="color: #ff9;">Layout: Vertical Height</label>
-        <input type="range" id="opt-layout-height" min="100" max="400" step="10">
-        <span id="val-layout-height"></span>
-    </div>
-
     <div style="margin-top: 15px; text-align: center;">
-        <button id="debug-reset" style="background: #d9534f; border:none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Reset to Defaults</button>
+        <button id="debug-reset" style="background: #d9534f; border:none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Reset to System Defaults</button>
     </div>
   </div>
 
   <div class="button-container">
     <button id="btn-physics" title="Toggle Physics (On/Off)"><i class="icon ion-ios-pause"></i></button>
     <button id="btn-pin" title="Pin/Unpin Selected Node"><i class="icon ion-pin"></i></button>
+    <button id="btn-info" title="Show Information"><i class="icon ion-information-circled"></i></button>
     <button id="btn-delete" title="Delete Selected Node"><i class="icon ion-trash-b"></i></button>
     <button id="btn-settings" title="Settings"><i class="icon ion-gear-a"></i></button>
   </div>

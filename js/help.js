@@ -2,13 +2,9 @@
 const isTouchDevice = 'd' in document.documentElement;
 
 // Create the Shepherd tour
-
-// FIX: 'buttons' might be null if the element isn't in HTML.
-// We will check for existence before using it later.
 const buttons = document.getElementById('buttons');
 const formbox = document.getElementById('formbox');
 
-// CHANGED: const -> var so it is globally accessible
 var shepherd = new Shepherd.Tour({
   defaults: {
     classes: 'shepherd-theme-arrows',
@@ -16,46 +12,29 @@ var shepherd = new Shepherd.Tour({
   },
 });
 
-// Add steps to the Shepherd tour.
+// -- UPDATED STEPS FOR FAMILY TREE --
 
 shepherd.addStep({
   text: [
-    'Input the name of a Wikipedia article here.',
-    'You can compare multiple topics by pressing <kbd>,</kbd> ' +
-    '<kbd>Tab</kbd> or <kbd>Enter</kbd> after each one.',
+    'Start by entering the name of a famous person.',
+    'Try <em>"Queen Victoria"</em>, <em>"Albert Einstein"</em>, or <em>"Barack Obama"</em>.',
   ],
   attachTo: '#input bottom',
   buttons: [
-    {
-      text: 'Back',
-      classes: 'shepherd-button-secondary',
-      action: shepherd.back,
-    },
-    {
-      text: 'Next',
-      classes: 'shepbtn',
-      action: shepherd.next,
-    },
+    { text: 'Back', classes: 'shepherd-button-secondary', action: shepherd.back },
+    { text: 'Next', classes: 'shepbtn', action: shepherd.next },
   ],
 });
 
 shepherd.addStep({
   text: [
-    "Once you're done, submit your query.",
-    'Wikipedia Map will create a node for each input topic.',
+    "Click 'Go' to load their profile.",
+    'The visualizer will fetch data from Wikidata to build the tree.',
   ],
   attachTo: '#submit bottom',
   buttons: [
-    {
-      text: 'Back',
-      classes: 'shepherd-button-secondary',
-      action: shepherd.back,
-    },
-    {
-      text: 'Next',
-      classes: 'shepbtn',
-      action: shepherd.next,
-    },
+    { text: 'Back', classes: 'shepherd-button-secondary', action: shepherd.back },
+    { text: 'Next', classes: 'shepbtn', action: shepherd.next },
   ],
   tetherOptions: {
     attachment: 'top left',
@@ -66,39 +45,31 @@ shepherd.addStep({
 
 shepherd.addStep({
   text: [
-    'Click a node to expand it.',
-    'Expanding a node creates a new node for each Wikipedia article linked in the first paragraph of the article whose node you clicked.',
-    '<img src="https://images.prismic.io/luke/db049805-b070-43c5-a412-d44c5ac3a4d7_wikipedia-expand.gif" alt="Expanding a Wikipedia Map node" style="width: 410px; height: 410px;" />',
+    '<strong>Expand the Tree:</strong>',
+    '• Click <strong>▲</strong> to reveal Parents.',
+    '• Click <strong>💍</strong> to reveal Spouses.',
+    '• Click the <strong>Numbered Circle</strong> to reveal Children.',
+    '• Click <strong>⇄</strong> (on hover) to show Siblings.',
   ],
   buttons: [
-    {
-      text: 'Back',
-      classes: 'shepherd-button-secondary',
-      action: shepherd.back,
-    },
-    {
-      text: 'Next',
-      classes: 'shepbtn',
-      action: shepherd.next,
-    },
+    { text: 'Back', classes: 'shepherd-button-secondary', action: shepherd.back },
+    { text: 'Next', classes: 'shepbtn', action: shepherd.next },
   ],
 });
 
+// NEW STEP: Explanation of Action Buttons
 shepherd.addStep({
   text: [
-    'Keep expanding nodes to build a map and connect topics!',
+    '<strong>Toolbar Controls:</strong>',
+    'Select a person on the graph to enable these tools:',
+    'ℹ️ <strong>Info:</strong> View biography & details.',
+    '📌 <strong>Pin:</strong> Lock a node in place.',
+    '🗑️ <strong>Delete:</strong> Remove node from tree.',
   ],
+  attachTo: '.button-container left',
   buttons: [
-    {
-      text: 'Back',
-      classes: 'shepherd-button-secondary',
-      action: shepherd.back,
-    },
-    {
-      text: "Let's go!",
-      classes: 'shepbtn',
-      action: shepherd.next,
-    },
+    { text: 'Back', classes: 'shepherd-button-secondary', action: shepherd.back },
+    { text: "Let's Go!", classes: 'shepbtn', action: shepherd.next },
   ],
 });
 
@@ -107,7 +78,6 @@ shepherd.on('start', () => {
   document.getElementById('container').style.opacity = 0.3;
   document.getElementById('container').style.pointerEvents = 'none';
   if (formbox) formbox.style.opacity = 0.3;
-  // FIX: Check if buttons exists before accessing style
   if (buttons) buttons.style.opacity = 0.3;
 });
 
@@ -116,7 +86,6 @@ function opaque() {
   document.getElementById('container').style.opacity = '';
   document.getElementById('container').style.pointerEvents = '';
   if (formbox) formbox.style.opacity = 1;
-  // FIX: Check if buttons exists before accessing style
   if (buttons) buttons.style.opacity = 1;
 }
 shepherd.on('complete', () => {
@@ -128,7 +97,6 @@ shepherd.on('cancel', opaque);
 // Prompt user for input when none detected
 function noInputDetected() {
   document.getElementById('container').style.opacity = 0.3;
-  // FIX: Check if buttons exists
   if (buttons) buttons.style.opacity = 0.3;
   shepherd.show();
 }
