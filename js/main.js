@@ -9,7 +9,6 @@ window.startpages = [];
 window.initialExpanded = false; 
 
 // -- MASTER LIST OF SUGGESTIONS --
-// Shared between the suggestions bar and the random button
 window.SUGGESTIONS = [
     // British Monarchy & Royalty
     "Queen Victoria", "Elizabeth II", "Charles III", "Henry VIII", "William the Conqueror",
@@ -94,29 +93,31 @@ const options = {
     smooth: {
       type: 'cubicBezier', 
       forceDirection: 'vertical',
-      roundness: 0.6 // Increased roundness for a draping/loose wire look
+      roundness: 0.4 
     },
     color: { color: '#666666', highlight: '#000000' }
   },
   interaction: {
-    hover: !isTouch, // Disable hover on touch devices to prevent navigation locking
+    hover: !isTouch, 
     dragNodes: true, 
     zoomView: true,
     dragView: true
   },
   physics: {
     enabled: true,
+    solver: 'barnesHut',
     barnesHut: {
-      gravitationalConstant: -3000, // STRONG repulsion to untangle nodes
-      centralGravity: 0.01,         // VERY WEAK pull to center (prevents crushing)
-      springLength: 200,            // Longer wires to allow spreading
-      springConstant: 0.01,         // Softer springs to prevent jitter/bouncing
-      damping: 0.5,                 // HIGH friction to stop movement quickly (thick air)
-      avoidOverlap: 1
+      gravitationalConstant: -7000, 
+      centralGravity: 0.02,         
+      springLength: 120,            
+      springConstant: 0.005,        
+      damping: 0.9,                 
+      avoidOverlap: 0.5             
     },
+    minVelocity: 0.1, 
     stabilization: {
-      enabled: true,
-      iterations: 1500,
+      enabled: false, 
+      iterations: 1000,
       updateInterval: 50
     }
   },
@@ -159,6 +160,12 @@ const getStartNode = pageName => ({
 });
 
 function clearNetwork() {
+  // UPDATED: Preserve Physics values from the ACTIVE NETWORK if possible
+  // This ensures we keep user's debug settings rather than resetting to defaults or reading stale DOM values.
+  if (network && network.physics && network.physics.options && network.physics.options.barnesHut) {
+      options.physics.barnesHut = { ...network.physics.options.barnesHut };
+  }
+
   if (initialized && network) {
     network.destroy();
     network = null;
@@ -168,7 +175,7 @@ function clearNetwork() {
 
   const cf = document.getElementById('input');
   unlockAll(cf);
-  clearItems(cf);
+  // clearItems(cf); // Keep names in input bar
 }
 
 function setStartPages(starts) {
@@ -208,12 +215,7 @@ function go() {
 
 function goRandom() {
   const cf = document.getElementsByClassName('commafield')[0];
-  // UPDATED: Use the global SUGGESTIONS list
-  const randomPeople = window.SUGGESTIONS || [
-    "Queen Victoria", "Barack Obama", "Donald Trump", "Elizabeth II", 
-    "Charles III", "Napoleon", "Genghis Khan", "Julius Caesar"
-  ];
-  const ra = randomPeople[Math.floor(Math.random() * randomPeople.length)];
+  const ra = window.SUGGESTIONS[Math.floor(Math.random() * window.SUGGESTIONS.length)];
   addItem(cf, ra);
   go(); 
 }
