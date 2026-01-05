@@ -3,7 +3,6 @@
 
 // -- LOGIC --
 
-// Helper: When a node is anchored (by parents or children), disable physics on its sibling edges
 function disableSiblingPhysics(nodeId) {
   const connectedEdges = edges.get({
     filter: e => (e.from === nodeId || e.to === nodeId) && e.dashes === true
@@ -13,6 +12,22 @@ function disableSiblingPhysics(nodeId) {
     const updates = connectedEdges.map(e => ({ id: e.id, physics: false }));
     edges.update(updates);
   }
+}
+
+function collapseChildren(unionId, childrenIds) {
+  if (!childrenIds || childrenIds.length === 0) return;
+
+  const idsToRemove = childrenIds.map(c => c.id);
+  
+  const triggersToRemove = [];
+  idsToRemove.forEach(id => {
+      triggersToRemove.push(`trigger_parents_${id}`);
+      triggersToRemove.push(`trigger_spouses_${id}`);
+      triggersToRemove.push(`trigger_siblings_${id}`);
+  });
+
+  nodes.remove([...idsToRemove, ...triggersToRemove]);
+  updateUnionState(unionId, childrenIds.length);
 }
 
 function expandChildren(unionId, childrenIds) {
@@ -45,17 +60,16 @@ function expandChildren(unionId, childrenIds) {
       animationTargets.push({ id: child.id, x: currentX, y: startY, fontSize: 14 });
     }
     if (!edges.get({ filter: e => e.from === unionId && e.to === child.id }).length) {
-      newEdges.push({ from: unionId, to: child.id, arrows: 'to', color: '#666' });
+      newEdges.push({ from: unionId, to: child.id, arrows: 'to', color: '#666', width: 0.5 });
     }
     currentX += 160;
   });
 
   nodes.add(newNodes);
   edges.add(newEdges);
-  updateUnionState(unionId, false);
   
-  // Anchor Parents: If this union has parents (spouses), disable their sibling physics
-  // because they are now anchored by this child-group.
+  updateUnionState(unionId, 'expanded');
+  
   const unionNode = nodes.get(unionId);
   if (unionNode && unionNode.spouseIds) {
       unionNode.spouseIds.forEach(spouseId => disableSiblingPhysics(spouseId));
@@ -121,14 +135,13 @@ function expandParents(childId, parents, visited = new Set()) {
   const createEdgeSafe = (from, to) => {
       const exists = edges.get({ filter: e => e.from === from && e.to === to }).length > 0;
       if (!exists) {
-          // REMOVED hardcoded length so global physics can control it
-          edges.add({ from: from, to: to, arrows: 'to', color: '#666' });
+          edges.add({ from: from, to: to, arrows: 'to', color: '#666', width: 0.5 });
       }
   };
 
   if (parents.length === 2) {
     const unionY = startY + 60;
-    const unionId = createUnionNode(parents[0].id, parents[1].id, 1, startX, unionY);
+    const unionId = createUnionNode(parents[0].id, parents[1].id, 0, startX, unionY);
     
     if (!nodes.get(unionId)) { 
         nodes.update({ id: unionId, x: pos.x, y: pos.y }); 
@@ -140,7 +153,6 @@ function expandParents(childId, parents, visited = new Set()) {
     createEdgeSafe(parents[0].id, childId);
   }
 
-  // Anchor Child: The child is now anchored to parents, so disable sibling physics
   disableSiblingPhysics(childId);
 
   const triggerId = `trigger_parents_${childId}`;
@@ -179,15 +191,16 @@ function expandSpouses(nodeId) {
   lockNodeTemporarily(nodeId);
 
   const pos = getPosition(nodeId);
-
   const spouses = data.family.spouses;
   const allChildren = data.family.children;
 
-  let spouseX = pos.x + 160;
   const animationTargets = [];
   
+  let count = 0;
   spouses.forEach(spouse => {
-    let targetX = spouseX;
+    const dir = (count % 2 === 0) ? 1 : -1;
+    const dist = (Math.floor(count / 2) + 1) * 160;
+    let targetX = pos.x + (dir * dist);
     
     if (!nodes.get(spouse.id)) {
       nodes.add({
@@ -200,18 +213,15 @@ function expandSpouses(nodeId) {
         y: pos.y,
       });
       animationTargets.push({ id: spouse.id, x: targetX, y: pos.y, fontSize: 14 });
-      
       expandNode(spouse.id, true);
-      spouseX += 160;
     } else {
         const spousePos = getPosition(spouse.id);
         targetX = spousePos.x;
-        spouseX = spousePos.x + 160;
     }
 
     const finalSpouseX = (nodes.get(spouse.id) ? (animationTargets.find(t=>t.id===spouse.id)?.x || getPosition(spouse.id).x) : targetX);
     const unionX = (pos.x + finalSpouseX) / 2;
-    const unionY = pos.y + 60;
+    const unionY = pos.y + 60; 
 
     const unionChildren = allChildren.filter(c => {
         if (!c.otherParents || c.otherParents.length === 0) return false;
@@ -219,13 +229,15 @@ function expandSpouses(nodeId) {
     });
     
     const unionId = createUnionNode(data.id, spouse.id, unionChildren.length, unionX, unionY);
+    
     nodes.update({ id: unionId, x: pos.x, y: pos.y });
     animationTargets.push({ id: unionId, x: unionX, y: unionY });
     
     if(unionChildren.length > 0) {
         nodes.update({ id: unionId, childrenIds: unionChildren });
-        updateUnionState(unionId, true);
     }
+    
+    count++;
   });
 
   const triggerId = `trigger_spouses_${nodeId}`;
@@ -243,11 +255,22 @@ function expandSpouses(nodeId) {
 function expandNode(id, isSilent = false) {
   if (!isSilent) startLoading();
 
+  // UPDATED: Start local loading
+  if (window.loadingNodes) {
+      window.loadingNodes.add(id);
+      if (window.startSpinnerLoop) window.startSpinnerLoop();
+  }
+
   let promise;
   if (window.familyCache[id]) promise = Promise.resolve(window.familyCache[id]);
   else {
     const node = nodes.get(id);
-    if (!node) { stopLoading(); return Promise.resolve(null); }
+    if (!node) { 
+        // Cleanup if node doesn't exist
+        if (window.loadingNodes) window.loadingNodes.delete(id);
+        stopLoading(); 
+        return Promise.resolve(null); 
+    }
 
     if (/^Q\d+$/.test(id)) {
         promise = getPageById(id, unwrap(node.label)).then(data => {
@@ -263,6 +286,9 @@ function expandNode(id, isSilent = false) {
   }
 
   return promise.then(data => {
+    // UPDATED: Stop local loading
+    if (window.loadingNodes) window.loadingNodes.delete(id);
+
     if (!data) return null;
     const node = nodes.get(data.id);
     if (!node) return data;
@@ -270,7 +296,6 @@ function expandNode(id, isSilent = false) {
     if (data.family.spouses.length > 0) {
        const unshownSpouses = data.family.spouses.filter(s => !nodes.get(s.id)).length;
        const hideSpouseTrigger = (data.family.spouses.length === 1 && unshownSpouses === 0);
-       
        if (!hideSpouseTrigger) {
            addTriggerNode(data.id, 'spouses', unshownSpouses);
        }
@@ -288,6 +313,8 @@ function expandNode(id, isSilent = false) {
     if (!isSilent) stopLoading();
     return data;
   }).catch(err => { 
+      // UPDATED: Stop local loading on error
+      if (window.loadingNodes) window.loadingNodes.delete(id);
       console.error(err); 
       if(!isSilent) stopLoading();
       return null;
@@ -299,60 +326,40 @@ window.toggleSiblings = function(nodeId) {
   if (!data) return;
 
   lockNodeTemporarily(nodeId);
-  
   const siblings = data.family.siblings;
   const isExpanded = window.siblingState[nodeId];
   const node = nodes.get(nodeId);
   const pos = getPosition(nodeId);
 
   if (isExpanded) {
-    // COLLAPSE LOGIC
     const ids = siblings.map(s => s.id).filter(id => id !== nodeId);
-    
-    // Identify triggers attached to these siblings so we can remove them
     const triggersToRemove = [];
     ids.forEach(id => {
        triggersToRemove.push(`trigger_parents_${id}`);
        triggersToRemove.push(`trigger_spouses_${id}`);
        triggersToRemove.push(`trigger_siblings_${id}`);
     });
-    
-    // Remove siblings AND their triggers
     nodes.remove([...ids, ...triggersToRemove]);
     triggersToRemove.forEach(t => window.activeTriggers.delete(t));
-
     window.siblingState[nodeId] = false;
   } else {
-    // EXPAND LOGIC
     const newNodes = [];
     const newEdges = [];
     const edgeUpdates = [];
     const animationTargets = [];
     const siblingsToExpand = [];
 
-    let direction = -1; 
-    const spouses = data.family.spouses || [];
-    if (spouses.length > 0) {
-       let spouseXTotal = 0;
-       spouses.forEach(s => { 
-           const p = getPosition(s.id); 
-           if(p) spouseXTotal += p.x; 
-       });
-       const avg = spouseXTotal / spouses.length;
-       if (avg < pos.x) direction = 1; 
-       else direction = -1;
-    }
-    
-    const spacing = direction * 160;
-    let currentX = pos.x + spacing;
-    
+    let count = 0;
     const mainNodeParents = data.family.parents || [];
     const parentsVisible = mainNodeParents.length > 0 && mainNodeParents.every(p => nodes.get(p.id));
 
     siblings.forEach(sib => {
       if (sib.id === nodeId) return;
       
-      // 1. Add Node (Only if it doesn't exist)
+      const dir = (count % 2 === 0) ? 1 : -1;
+      const dist = (Math.floor(count / 2) + 1) * 160;
+      let targetX = pos.x + (dir * dist);
+      
       if (!nodes.get(sib.id)) {
         newNodes.push({
           id: sib.id,
@@ -363,12 +370,10 @@ window.toggleSiblings = function(nodeId) {
           x: pos.x,         
           y: pos.y,
         });
-        
-        animationTargets.push({ id: sib.id, x: currentX, y: pos.y, fontSize: 14 });
+        animationTargets.push({ id: sib.id, x: targetX, y: pos.y, fontSize: 14 });
         siblingsToExpand.push(sib.id);
       }
 
-      // 2. Handle Edge
       const existingEdges = edges.get({
         filter: e => (e.from === nodeId && e.to === sib.id) || (e.from === sib.id && e.to === nodeId)
       });
@@ -381,20 +386,19 @@ window.toggleSiblings = function(nodeId) {
             to: sib.id, 
             color: customEdgeColor, 
             dashes: true, 
-            physics: !parentsVisible 
+            physics: false 
         });
       } else {
-        // Force update existing edges to ensure color is applied
         existingEdges.forEach(e => {
             edgeUpdates.push({ 
                 id: e.id, 
                 color: customEdgeColor, 
-                dashes: true 
+                dashes: true,
+                physics: false 
             });
         });
       }
-      
-      currentX += spacing;
+      count++;
     });
 
     if (newNodes.length > 0) nodes.add(newNodes);
@@ -426,7 +430,12 @@ window.handleTriggerClick = function(nodeId) {
 
   if (node.isUnion) {
      if (node.childrenIds && node.childrenIds.length > 0) {
-        expandChildren(nodeId, node.childrenIds);
+         const firstChildId = node.childrenIds[0].id;
+         if (nodes.get(firstChildId)) {
+             collapseChildren(nodeId, node.childrenIds);
+         } else {
+             expandChildren(nodeId, node.childrenIds);
+         }
      }
      return;
   }
@@ -439,7 +448,6 @@ window.handleTriggerClick = function(nodeId) {
   else if (trigger.triggerType === 'siblings') {
      window.toggleSiblings(trigger.parentId);
      const isExpanded = window.siblingState[trigger.parentId];
-     
      let label = '✕';
      if (!isExpanded) {
         const data = window.familyCache[trigger.parentId];
