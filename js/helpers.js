@@ -116,18 +116,9 @@ function getEdgeConnecting(a, b) {
 
 // Get the network's center of gravity
 function getCenter() {
-  const nodePositions = network.getPositions();
-  const keys = Object.keys(nodePositions);
-
-  // Find the sum of all x and y values
-  let xsum = 0; let ysum = 0;
-
-  Object.values(nodePositions).forEach((pos) => {
-    xsum += pos.x;
-    ysum += pos.y;
-  });
-
-  return [xsum / keys.length, ysum / keys.length]; // Average is sum divided by length
+  // UPDATED: Forces the gravity center to 0,0 of the canvas/world
+  // instead of calculating the average position of the tree.
+  return [0, 0];
 }
 
 // Get the position in which nodes should be spawned given the id of a parent node.
@@ -166,12 +157,12 @@ function updateNodeValue(nodeId) {
   });
   const degree = connectedEdges.length;
 
-  // Update the value (visual size) and mass (physical weight).
-  // Mass starts at 1 and increases by 0.5 for every connection.
+  // FIX: REMOVED Mass scaling. Heavy nodes caused massive repulsion, making spouses drift apart.
+  // Now we only update value (visual size) but keep physics mass constant (1).
   nodes.update({ 
     id: nodeId, 
     value: Math.max(1, degree),
-    mass: 1 + (degree * 0.5) 
+    mass: 1 // Forced to 1
   });
 }
 
