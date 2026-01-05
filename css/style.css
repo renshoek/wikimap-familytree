@@ -116,27 +116,36 @@ a:hover {
 /* == DEBUG PANEL STYLES == */
 .debug-btn {
   position: fixed;
-  bottom: 20px;
-  left: 10px; /* MOVED TO LEFT */
+  bottom: 220px; /* UPDATED: Above the button container (5 buttons * 40px + 20px buffer) */
+  right: 12px;   /* UPDATED: Aligned with button container */
   z-index: 1000;
-  background-color: rgba(0,0,0,0.7);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 12px;
+  background: none; /* UPDATED: No background */
+  border: none;     /* UPDATED: No border */
+  box-shadow: none; /* UPDATED: No shadow */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  text-transform: uppercase;
-  font-weight: bold;
+  opacity: 0.6;
+  transition: opacity 0.2s, transform 0.2s;
 }
 .debug-btn:hover {
-  background-color: rgba(0,0,0,0.9);
+  opacity: 1;
+  transform: scale(1.1);
+  background: none;
+}
+.debug-btn .icon {
+    font-size: 16px; /* UPDATED: Smaller icon */
+    color: #555 !important;
 }
 
 .debug-panel {
   position: fixed;
-  bottom: 10px;
-  left: 10px; /* MOVED TO LEFT */
+  top: 50px;    /* Top Right */
+  right: 10px;  /* Top Right */
   width: 260px;
   background-color: rgba(0,0,0,0.85);
   color: white;
