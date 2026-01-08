@@ -4,6 +4,11 @@
 const WD_API = 'https://www.wikidata.org/w/api.php';
 const WD_SPARQL = 'https://query.wikidata.org/sparql';
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Fetch error: ${response.statusText}`);
@@ -19,43 +24,171 @@ async function searchEntity(term) {
   throw new Error('Entity not found');
 }
 
+// -- DATE HELPERS --
+
+function formatYearStr(year) {
+    if (year === null || year === undefined) return 'unknown';
+    if (year < 0) return `${Math.abs(year)} BC`;
+    return `${year}`;
+}
+
+function getOrdinal(n) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// Main formatting function based on precision
+// Precision: 11=Day, 10=Month, 9=Year, 8=Decade, 7=Century, 6=Millennium
+// Added 'showMonthsDays' param (defaults to true) to control detailed output
+function formatDateByPrecision(isoStr, precision, showMonthsDays = true) {
+    if (!isoStr) return null;
+    const prec = parseInt(precision, 10);
+    
+    try {
+        const isBC = isoStr.startsWith('-');
+        const cleanStr = isoStr.replace(/^[+-]/, '');
+        const parts = cleanStr.split('T')[0].split('-');
+        
+        let year = parseInt(parts[0], 10);
+        let month = parts[1] ? parseInt(parts[1], 10) : null;
+        let day = parts[2] ? parseInt(parts[2], 10) : null;
+
+        if (isNaN(year)) return null;
+        const absYear = year;
+        if (isBC) year = -year;
+
+        // 1. Century (7)
+        if (prec === 7) {
+            const century = Math.ceil(absYear / 100);
+            return `${getOrdinal(century)} century${isBC ? ' BCE' : ''}`;
+        }
+
+        // 2. Millennium (6)
+        if (prec === 6) {
+             const mill = Math.ceil(absYear / 1000);
+             return `${getOrdinal(mill)} millennium${isBC ? ' BCE' : ''}`;
+        }
+
+        // 3. Decade (8)
+        if (prec === 8) {
+            return `${year}s`;
+        }
+
+        // 4. Specific Date (9, 10, 11)
+        let result = "";
+        
+        // Only show Day/Month if precision allows AND requested
+        if (showMonthsDays) {
+            if (prec >= 11 && day && month) {
+                result += `${day} ${MONTH_NAMES[month - 1]} `;
+            } else if (prec >= 10 && month) {
+                result += `${MONTH_NAMES[month - 1]} `;
+            }
+        }
+        
+        result += formatYearStr(year);
+        return result;
+
+    } catch (e) {
+        return null;
+    }
+}
+
+function formatLifeSpan(dobStr, dobPrec, dodStr, dodPrec) {
+    let birthText = null;
+    let deathText = null;
+    let birthYear = null;
+    let deathYear = null;
+
+    // Parse Birth - Pass FALSE to suppress day/month for canvas nodes
+    if (dobStr) {
+        birthText = formatDateByPrecision(dobStr, dobPrec || 9, false);
+        try {
+            const d = new Date(dobStr);
+            if (!isNaN(d.getFullYear())) {
+                birthYear = d.getFullYear();
+                if (dobStr.startsWith('-')) birthYear = -Math.abs(birthYear);
+            }
+        } catch(e){}
+    }
+
+    // Parse Death - Pass FALSE to suppress day/month for canvas nodes
+    if (dodStr) {
+        deathText = formatDateByPrecision(dodStr, dodPrec || 9, false);
+        try {
+            const d = new Date(dodStr);
+            if (!isNaN(d.getFullYear())) {
+                deathYear = d.getFullYear();
+                if (dodStr.startsWith('-')) deathYear = -Math.abs(deathYear);
+            }
+        } catch(e){}
+    }
+
+    // Logic
+    if (birthText && deathText) {
+        let ageStr = "";
+        if (birthYear !== null && deathYear !== null && (!dobPrec || dobPrec >= 9) && (!dodPrec || dodPrec >= 9)) {
+            const age = deathYear - birthYear;
+            ageStr = ` (${age})`;
+        }
+        return `${birthText} - ${deathText}${ageStr}`;
+    } 
+    else if (birthText && !deathText) {
+        // Assume dead logic
+        let isAssumedDead = false;
+        if (birthYear !== null) {
+            const currentYear = new Date().getFullYear();
+            if (currentYear - birthYear > 115) isAssumedDead = true;
+        }
+
+        if (isAssumedDead) {
+            return `${birthText} - unknown`;
+        } else {
+            // Living
+            let ageStr = "";
+            if (birthYear !== null && (!dobPrec || dobPrec >= 9)) {
+                const currentYear = new Date().getFullYear();
+                ageStr = ` (${currentYear - birthYear})`;
+            }
+            return `${birthText}${ageStr}`;
+        }
+    } 
+    else if (!birthText && deathText) {
+        return `unknown - ${deathText}`;
+    }
+    
+    return null;
+}
+
 /**
- * Get family members, gender, AND parentage info for children.
- * Uses COALESCE to robustly find the co-parent.
+ * Get family members...
  */
 async function getFamilyData(qid) {
   const query = `
-    SELECT ?relative ?relativeLabel ?type ?genderLabel ?otherParent WHERE {
+    SELECT ?relative ?relativeLabel ?type ?genderLabel ?otherParent ?dob ?dobPrec ?dod ?dodPrec WHERE {
       VALUES ?subject { wd:${qid} }
       
       {
-        # 1. CHILDREN & Their Other Parent
         ?subject wdt:P40 ?relative .
         BIND("child" AS ?type)
-        
-        # Robustly try to find the other parent (P22=Father, P25=Mother)
         OPTIONAL { ?relative wdt:P22 ?p22 . FILTER(?p22 != ?subject) }
         OPTIONAL { ?relative wdt:P25 ?p25 . FILTER(?p25 != ?subject) }
         BIND(COALESCE(?p22, ?p25) AS ?otherParent)
       } 
       UNION {
-        # 2. PARENTS
         { ?subject wdt:P22 ?relative } UNION { ?subject wdt:P25 ?relative }
         BIND("parent" AS ?type)
       } 
       UNION {
-        # 3. SIBLINGS
         ?subject wdt:P3373 ?relative .
         BIND("sibling" AS ?type)
       } 
       UNION {
-        # 4. SPOUSES (Explicit)
         ?subject wdt:P26 ?relative .
         BIND("spouse" AS ?type)
       } 
       UNION {
-        # 5. IMPLIED PARTNERS (Co-parents)
-        # Find children, then find their other parent.
         ?subject wdt:P40 ?child .
         { ?child wdt:P22 ?relative } UNION { ?child wdt:P25 ?relative }
         FILTER(?relative != ?subject)
@@ -63,6 +196,16 @@ async function getFamilyData(qid) {
       }
       
       OPTIONAL { ?relative wdt:P21 ?gender . }
+      
+      OPTIONAL { 
+        ?relative p:P569/psv:P569 ?dobNode .
+        ?dobNode wikibase:timeValue ?dob ; wikibase:timePrecision ?dobPrec .
+      }
+      
+      OPTIONAL { 
+        ?relative p:P570/psv:P570 ?dodNode .
+        ?dodNode wikibase:timeValue ?dod ; wikibase:timePrecision ?dodPrec .
+      }
       
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
@@ -81,7 +224,7 @@ async function getFamilyData(qid) {
 
   const family = {
     parents: [],
-    children: [], // Stores { id, label, gender, otherParents: [] }
+    children: [], 
     siblings: [],
     spouses: []
   };
@@ -92,13 +235,22 @@ async function getFamilyData(qid) {
   if (data.results && data.results.bindings) {
     data.results.bindings.forEach(row => {
       const id = row.relative.value.split('/').pop();
+      if (!/^Q\d+$/.test(id)) return; 
+
       const name = row.relativeLabel.value;
       const type = row.type.value;
       const gender = getGender(row.genderLabel ? row.genderLabel.value : '');
       
+      const dob = row.dob ? row.dob.value : null;
+      const dobPrec = row.dobPrec ? row.dobPrec.value : null;
+      const dod = row.dod ? row.dod.value : null;
+      const dodPrec = row.dodPrec ? row.dodPrec.value : null;
+
+      const lifeSpan = formatLifeSpan(dob, dobPrec, dod, dodPrec);
+      
       if (name.match(/^Q\d+$/)) return; 
 
-      const person = { id, label: name, gender };
+      const person = { id, label: name, gender, lifeSpan };
 
       if (type === 'child') {
         if (!seenChildren[id]) {
@@ -107,8 +259,10 @@ async function getFamilyData(qid) {
         }
         if (row.otherParent) {
           const pid = row.otherParent.value.split('/').pop();
-          if (!seenChildren[id].otherParents.includes(pid)) {
-             seenChildren[id].otherParents.push(pid);
+          if (/^Q\d+$/.test(pid)) {
+             if (!seenChildren[id].otherParents.includes(pid)) {
+                seenChildren[id].otherParents.push(pid);
+             }
           }
         }
       } else {
@@ -124,27 +278,65 @@ async function getFamilyData(qid) {
   return family;
 }
 
-async function getEntityGender(qid) {
-  const query = `SELECT ?genderLabel WHERE { wd:${qid} wdt:P21 ?gender . SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 1`;
+// Fetches Gender AND Dates for the specific entity (used for the center node)
+async function getEntityBasicInfo(qid) {
+  const query = `
+    SELECT ?genderLabel ?dob ?dobPrec ?dod ?dodPrec WHERE { 
+      wd:${qid} wdt:P21 ?gender . 
+      
+      OPTIONAL { 
+        wd:${qid} p:P569/psv:P569 ?dobNode .
+        ?dobNode wikibase:timeValue ?dob ; wikibase:timePrecision ?dobPrec .
+      }
+      OPTIONAL { 
+        wd:${qid} p:P570/psv:P570 ?dodNode .
+        ?dodNode wikibase:timeValue ?dod ; wikibase:timePrecision ?dodPrec .
+      }
+      
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } 
+    } LIMIT 1`;
+    
   const url = `${WD_SPARQL}?query=${encodeURIComponent(query)}&format=json`;
   const data = await fetchJson(url);
+  
+  const result = { gender: 'unknown', lifeSpan: null };
+  
   if (data.results && data.results.bindings.length > 0) {
-    const label = data.results.bindings[0].genderLabel.value.toLowerCase();
-    if (label.includes('female')) return 'female';
-    if (label.includes('male')) return 'male';
+    const row = data.results.bindings[0];
+    const label = row.genderLabel ? row.genderLabel.value.toLowerCase() : '';
+    if (label.includes('female')) result.gender = 'female';
+    else if (label.includes('male')) result.gender = 'male';
+    
+    const dob = row.dob ? row.dob.value : null;
+    const dobPrec = row.dobPrec ? row.dobPrec.value : null;
+    const dod = row.dod ? row.dod.value : null;
+    const dodPrec = row.dodPrec ? row.dodPrec.value : null;
+    
+    result.lifeSpan = formatLifeSpan(dob, dobPrec, dod, dodPrec);
   }
-  return 'unknown';
+  return result;
 }
 
-// NEW: Fetch detailed biographical info for the Modal
+function sanitizeLocation(labelObj) {
+    if (!labelObj) return null;
+    const val = labelObj.value;
+    if (val.startsWith('http')) return null; 
+    return val;
+}
+
 async function getPersonDetails(qid) {
-  // UPDATED QUERY: Now fetches Country (P17) for Birth/Death places
   const query = `
-    SELECT ?desc ?dob ?dod ?pobLabel ?podLabel ?pobCountryLabel ?podCountryLabel ?img ?article ?entityLabel ?entityDescription WHERE {
+    SELECT ?desc ?dob ?dobPrec ?dod ?dodPrec ?pobLabel ?podLabel ?pobCountryLabel ?podCountryLabel ?img ?article ?entityLabel ?entityDescription WHERE {
       BIND(wd:${qid} AS ?entity)
       
-      OPTIONAL { ?entity wdt:P569 ?dob . }
-      OPTIONAL { ?entity wdt:P570 ?dod . }
+      OPTIONAL { 
+        ?entity p:P569/psv:P569 ?dobNode .
+        ?dobNode wikibase:timeValue ?dob ; wikibase:timePrecision ?dobPrec .
+      }
+      OPTIONAL { 
+        ?entity p:P570/psv:P570 ?dodNode .
+        ?dodNode wikibase:timeValue ?dod ; wikibase:timePrecision ?dodPrec .
+      }
       
       OPTIONAL { 
         ?entity wdt:P19 ?pob . 
@@ -172,16 +364,45 @@ async function getPersonDetails(qid) {
   
   if (data.results && data.results.bindings.length > 0) {
       const row = data.results.bindings[0];
+      
+      let isAssumedDead = false;
+      let birthYear = null;
+      if (row.dob) {
+           const d = new Date(row.dob.value);
+           if (!isNaN(d.getFullYear())) {
+               birthYear = d.getFullYear();
+               if (row.dob.value.startsWith('-')) birthYear = -Math.abs(birthYear);
+               if (!row.dod && (new Date().getFullYear() - birthYear > 115)) {
+                   isAssumedDead = true;
+               }
+           }
+      }
+
+      // Keep default (true) for Modal to show day/month
+      let birthDateStr = row.dob ? formatDateByPrecision(row.dob.value, row.dobPrec ? row.dobPrec.value : 9) : null;
+      let deathDateStr = row.dod ? formatDateByPrecision(row.dod.value, row.dodPrec ? row.dodPrec.value : 9) : null;
+
+      if (!birthDateStr) {
+          if (row.dod || isAssumedDead) birthDateStr = "unknown";
+      }
+      
+      if (!deathDateStr) {
+          if (isAssumedDead) deathDateStr = "unknown";
+      }
+
       return {
           id: qid,
           label: row.entityLabel ? row.entityLabel.value : qid,
           description: row.entityDescription ? row.entityDescription.value : '',
-          birthDate: row.dob ? new Date(row.dob.value).toLocaleDateString() : null,
-          deathDate: row.dod ? new Date(row.dod.value).toLocaleDateString() : null,
-          birthPlace: row.pobLabel ? row.pobLabel.value : null,
-          birthCountry: row.pobCountryLabel ? row.pobCountryLabel.value : null, // Added
-          deathPlace: row.podLabel ? row.podLabel.value : null,
-          deathCountry: row.podCountryLabel ? row.podCountryLabel.value : null, // Added
+          
+          birthDate: birthDateStr,
+          deathDate: deathDateStr,
+          
+          birthPlace: sanitizeLocation(row.pobLabel),
+          birthCountry: sanitizeLocation(row.pobCountryLabel),
+          deathPlace: sanitizeLocation(row.podLabel),
+          deathCountry: sanitizeLocation(row.podCountryLabel),
+          
           image: row.img ? row.img.value : null,
           wikipedia: row.article ? row.article.value : null
       };
@@ -193,12 +414,13 @@ async function getSubPages(pageName) {
   try {
     const entity = await searchEntity(pageName);
     const family = await getFamilyData(entity.id);
-    const gender = await getEntityGender(entity.id);
+    const info = await getEntityBasicInfo(entity.id);
 
     return {
       redirectedTo: entity.label, 
       id: entity.id,
-      gender: gender,
+      gender: info.gender,
+      lifeSpan: info.lifeSpan, 
       family: family,             
       links: [] 
     };
@@ -215,12 +437,13 @@ async function getSubPages(pageName) {
 async function getPageById(id, label) {
   try {
     const family = await getFamilyData(id);
-    const gender = await getEntityGender(id);
+    const info = await getEntityBasicInfo(id);
 
     return {
       redirectedTo: label, 
       id: id,
-      gender: gender,
+      gender: info.gender,
+      lifeSpan: info.lifeSpan, 
       family: family,             
       links: [] 
     };
@@ -236,4 +459,4 @@ async function getPageById(id, label) {
 
 window.getSubPages = getSubPages;
 window.getPageById = getPageById;
-window.getPersonDetails = getPersonDetails; // Export
+window.getPersonDetails = getPersonDetails;
