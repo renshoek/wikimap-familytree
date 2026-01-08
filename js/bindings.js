@@ -15,41 +15,7 @@ const PHYSICS_DEFAULTS = {
 
 // -- HELPER: Update Action Buttons State (Grey out if no selection) --
 function updateSelectionButtons() {
-    const btnPin = document.getElementById('btn-pin');
-    const btnDelete = document.getElementById('btn-delete');
-    const btnInfo = document.getElementById('btn-info');
-    
-    let hasSelection = false;
-    if (typeof network !== 'undefined' && network) {
-        const selected = network.getSelectedNodes();
-        if (selected && selected.length > 0) {
-             const node = nodes.get(selected[0]);
-             if (node && !node.isTrigger && !node.isUnion) {
-                 hasSelection = true;
-             }
-        }
-    }
-
-    const opacity = hasSelection ? '1' : '0.3';
-    const cursor = hasSelection ? 'pointer' : 'default';
-
-    if (btnPin) {
-        btnPin.disabled = !hasSelection;
-        btnPin.style.opacity = opacity;
-        btnPin.style.cursor = cursor;
-    }
-    
-    if (btnDelete) {
-        btnDelete.disabled = !hasSelection;
-        btnDelete.style.opacity = opacity;
-        btnDelete.style.cursor = cursor;
-    }
-
-    if (btnInfo) {
-        btnInfo.disabled = !hasSelection;
-        btnInfo.style.opacity = opacity;
-        btnInfo.style.cursor = cursor;
-    }
+    // Only keeping logic for buttons that still exist in the main UI
 }
 
 // -- HELPER: Delete Nodes + Their Triggers --
@@ -77,6 +43,10 @@ function deleteNodesWithTriggers(ids) {
         lastClickedNode = null;
     }
     
+    // Also hide the info card if the selected node was deleted
+    const card = document.getElementById('node-info-card');
+    if (card) card.style.display = 'none';
+
     updateSelectionButtons();
 }
 
@@ -88,6 +58,119 @@ function resetProperties() {
   console.log("Resetting properties");
 }
 
+function showNodeInfo(nodeId) {
+    const card = document.getElementById('node-info-card');
+    if (!card) return;
+
+    // Determine Pin State
+    const node = nodes.get(nodeId);
+    const isPinned = node && (node.fixed === true || (node.fixed && node.fixed.x && node.fixed.y));
+    const pinTitle = isPinned ? "Unpin Node" : "Pin Node";
+    // If pinned, show the 'pinned' style icon (filled or active look), or just standard pin
+    // Using ion-pinpoint for pinned state to differentiate visually
+    const pinIcon = isPinned ? "ion-pinpoint" : "ion-pin"; 
+
+    // Show wrapper
+    card.style.display = 'block';
+    
+    // Structure: Floating Actions + Content Box
+    // Note: card-btn-delete uses standard style now to match "button list" request
+    const actionsHtml = `
+      <div class="info-actions">
+          <button id="card-btn-pin" title="${pinTitle}">
+             <i class="icon ${pinIcon}"></i>
+          </button>
+          <button id="card-btn-delete" title="Delete Node">
+             <i class="icon ion-trash-b"></i>
+          </button>
+      </div>
+    `;
+
+    const loadingHtml = `
+        <div class="info-content">
+            <button class="close-card" id="card-close">&times;</button>
+            <div style="text-align:center; padding:10px;">
+                <i class="icon ion-load-c" style="animation: spin 1s infinite linear; display:inline-block;"></i> Loading...
+            </div>
+        </div>
+    `;
+
+    card.innerHTML = actionsHtml + loadingHtml;
+
+    // Bind Events Helper
+    const bindEvents = () => {
+        const btnPin = document.getElementById('card-btn-pin');
+        const btnDelete = document.getElementById('card-btn-delete');
+        const btnClose = document.getElementById('card-close');
+
+        if(btnPin) {
+            btnPin.onclick = () => {
+                const n = nodes.get(nodeId);
+                const currentFixed = n.fixed === true || (n.fixed && n.fixed.x && n.fixed.y);
+                nodes.update({ id: nodeId, fixed: !currentFixed });
+                // Re-render to show updated pin state
+                showNodeInfo(nodeId);
+            };
+        }
+        if(btnDelete) {
+            btnDelete.onclick = () => {
+                deleteNodesWithTriggers([nodeId]);
+            };
+        }
+        if(btnClose) {
+            btnClose.onclick = () => {
+                card.style.display = 'none';
+            };
+        }
+    };
+    bindEvents();
+
+    if(window.getPersonDetails) {
+        window.getPersonDetails(nodeId).then(details => {
+            if(!details) {
+                card.innerHTML = actionsHtml + `
+                    <div class="info-content">
+                        <button class="close-card" id="card-close">&times;</button>
+                        <div>No details found.</div>
+                    </div>`;
+                bindEvents();
+                return;
+            }
+
+            const contentHtml = `
+                <div class="info-content">
+                    <button class="close-card" id="card-close">&times;</button>
+                    <div style="clear:both;">
+                        ${details.image ? `<img src="${details.image}" alt="${details.label}">` : ''}
+                        <h2 style="margin-bottom: 5px;">${details.label}</h2>
+                        <p style="margin:0; font-size:0.9em; color:#555;">${details.description || ''}</p>
+                    </div>
+                    <div style="clear:both; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+                        ${details.birthDate ? `<div><strong>Born:</strong> ${details.birthDate} ${details.birthPlace ? `in ${details.birthPlace}` : ''}${details.birthCountry ? `, ${details.birthCountry}` : ''}</div>` : ''}
+                        ${details.deathDate ? `<div><strong>Died:</strong> ${details.deathDate} ${details.deathPlace ? `in ${details.deathPlace}` : ''}${details.deathCountry ? `, ${details.deathCountry}` : ''}</div>` : ''}
+                    </div>
+                    <div style="margin-top:10px; text-align:right;">
+                        <a href="https://www.wikidata.org/wiki/${details.id}" target="_blank" style="font-size:0.85em; margin-right:10px;">Wikidata</a>
+                        ${details.wikipedia ? `<a href="${details.wikipedia}" target="_blank" style="font-size:0.85em;">Wikipedia</a>` : ''}
+                    </div>
+                </div>
+            `;
+            
+            card.innerHTML = actionsHtml + contentHtml;
+            bindEvents(); // Re-bind after HTML replacement
+
+        }).catch(err => {
+            console.error(err);
+            card.innerHTML = actionsHtml + `
+                <div class="info-content">
+                    <button class="close-card" id="card-close">&times;</button>
+                    <div>Error fetching details.</div>
+                </div>`;
+            bindEvents();
+        });
+    }
+}
+
 function clickEvent(params) {
   if (params.nodes.length) {
     const nodeId = params.nodes[0];
@@ -97,6 +180,9 @@ function clickEvent(params) {
       handleTriggerClick(nodeId);
       return;
     }
+    
+    // Show Info Card
+    showNodeInfo(nodeId);
 
     if (isTouchDevice || nodeId === lastClickedNode) {
       traceBack(nodeId);
@@ -108,6 +194,9 @@ function clickEvent(params) {
   } else {
     lastClickedNode = null;
     resetProperties();
+    // Hide info card when deselecting
+    const card = document.getElementById('node-info-card');
+    if (card) card.style.display = 'none';
   }
 }
 
@@ -249,96 +338,7 @@ function bindSuggestions() {
 }
 
 function bindActionButtons() {
-  const btnDelete = document.getElementById('btn-delete');
-  if (btnDelete) {
-    btnDelete.addEventListener('click', () => {
-        const selected = network.getSelectedNodes();
-        if (selected.length > 0) {
-            deleteNodesWithTriggers(selected);
-        } else {
-            alert("Please select a node to delete.");
-        }
-    });
-  }
-
-  const btnPin = document.getElementById('btn-pin');
-  if (btnPin) {
-    btnPin.addEventListener('click', () => {
-        const selected = network.getSelectedNodes();
-        if (selected.length > 0) {
-            const updates = selected.map(id => {
-                const node = nodes.get(id);
-                const isFixed = node.fixed === true || (node.fixed && node.fixed.x && node.fixed.y);
-                return { id: id, fixed: !isFixed };
-            });
-            nodes.update(updates);
-        } else {
-            alert("Please select a node to pin/unpin.");
-        }
-    });
-  }
-
-  const btnInfo = document.getElementById('btn-info');
-  if (btnInfo) {
-      btnInfo.addEventListener('click', () => {
-          const selected = network.getSelectedNodes();
-          if (selected.length > 0) {
-              const nodeId = selected[0];
-              const node = nodes.get(nodeId);
-              if(node.isTrigger || node.isUnion) return;
-
-              if(window.startLoading) window.startLoading();
-              
-              if(window.getPersonDetails) {
-                  window.getPersonDetails(nodeId).then(details => {
-                      if(window.stopLoading) window.stopLoading();
-                      if(!details) {
-                          alert("Could not fetch details.");
-                          return;
-                      }
-                      
-                      const html = `
-                        <div style="padding: 20px; min-width: 300px; max-width: 400px; font-family: sans-serif; position: relative;">
-                            <button id="info-modal-close" style="position: absolute; top: 0px; right: 0px; border: none; background: none; font-size: 1.5em; cursor: pointer; color: #555; line-height: 1;">&times;</button>
-                            
-                            <div style="display: flex; gap: 15px; margin-bottom: 15px; padding-right: 20px;">
-                                ${details.image ? `<img src="${details.image}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 5px; border: 1px solid #ccc;">` : ''}
-                                <div>
-                                    <h2 style="margin: 0 0 5px 0; font-size: 1.3em;">${details.label}</h2>
-                                    <p style="margin: 0; color: #666; font-size: 0.9em; line-height: 1.4;">${details.description || 'No description available.'}</p>
-                                </div>
-                            </div>
-                            
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.95em; margin-bottom: 15px;">
-                                ${details.birthDate ? `<tr><td style="padding: 4px 0; font-weight: bold; width: 60px; vertical-align: top;">Born:</td><td style="padding: 4px 0;">${details.birthDate} ${details.birthPlace ? `in ${details.birthPlace}` : ''}${details.birthCountry ? `, ${details.birthCountry}` : ''}</td></tr>` : ''}
-                                ${details.deathDate ? `<tr><td style="padding: 4px 0; font-weight: bold; width: 60px; vertical-align: top;">Died:</td><td style="padding: 4px 0;">${details.deathDate} ${details.deathPlace ? `in ${details.deathPlace}` : ''}${details.deathCountry ? `, ${details.deathCountry}` : ''}</td></tr>` : ''}
-                            </table>
-                            
-                            <div style="margin-top: 15px; text-align: right; display: flex; gap: 10px; justify-content: flex-end;">
-                                <a href="https://www.wikidata.org/wiki/${details.id}" target="_blank" style="color: #444; text-decoration: none; border: 1px solid #ccc; padding: 5px 12px; border-radius: 4px; font-size: 0.85em; transition: background 0.2s;">Wikidata</a>
-                                ${details.wikipedia ? `<a href="${details.wikipedia}" target="_blank" style="background: #eee; color: #333; text-decoration: none; padding: 5px 12px; border-radius: 4px; font-size: 0.85em; font-weight: bold; transition: background 0.2s;">Wikipedia</a>` : ''}
-                            </div>
-                        </div>
-                      `;
-
-                      const modal = new Modal(html);
-                      modal.present();
-                      
-                      const closeBtn = document.getElementById('info-modal-close');
-                      if(closeBtn) {
-                          closeBtn.onclick = () => modal.close();
-                      }
-
-                  }).catch(err => {
-                      if(window.stopLoading) window.stopLoading();
-                      console.error(err);
-                      alert("Error fetching details.");
-                  });
-              }
-
-          }
-      });
-  }
+  // Pin and Delete bindings removed (handled in showNodeInfo now)
 
   const btnPhysics = document.getElementById('btn-physics');
   if (btnPhysics) {
