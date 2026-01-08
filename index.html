@@ -7,7 +7,6 @@
   <title>Family Tree Visualizer</title>
 
   <script data-skip-dnt="true" async defer src="https://sa.luk.ke/latest.js"></script>
-  <noscript><img src="https://sa.luk.ke/noscript.gif?ignore-dnt=true" alt="" referrerpolicy="no-referrer-when-downgrade" /></noscript>
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" type="text/css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shepherd/1.7.0/css/shepherd-theme-arrows.css" type="text/css" />
@@ -76,10 +75,17 @@
 
       </div>
 
-      <h3 style="border-bottom: none; margin-top: 30px; font-weight: normal; color: #555;">Try a famous figure:</h3>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 30px; margin-bottom: 10px;">
+        <h3 style="border-bottom: none; margin: 0; font-weight: normal; color: #555;">Try a famous figure:</h3>
+        <button id="refresh-suggestions" style="background: none; border: none; cursor: pointer; color: #555;" title="Refresh list">
+          <i class="icon ion-refresh"></i>
+        </button>
+      </div>
       <div id="suggestions" class="suggestion-grid"></div>
     </div>
   </div>
+
+  <div id="node-info-card" style="display: none;"></div>
 
   <button id="debug-trigger" class="debug-btn" title="Debug Physics"><i class="icon ion-bug"></i></button>
 
@@ -120,9 +126,6 @@
 
   <div class="button-container">
     <button id="btn-physics" title="Toggle Physics (On/Off)"><i class="icon ion-ios-pause"></i></button>
-    <button id="btn-pin" title="Pin/Unpin Selected Node"><i class="icon ion-pin"></i></button>
-    <button id="btn-info" title="Show Information"><i class="icon ion-information-circled"></i></button>
-    <button id="btn-delete" title="Delete Selected Node"><i class="icon ion-trash-b"></i></button>
     <button id="btn-settings" title="Settings"><i class="icon ion-gear-a"></i></button>
   </div>
 
