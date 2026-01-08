@@ -98,15 +98,15 @@ function addTriggerNode(parentId, type, count, x, y) {
     color = { background: 'rgba(255, 255, 255, 0.2)', border: '#ccc' };
   } else if (type === 'spouses') {
     icon = '💍'; 
-    if(parentPos) { x = parentPos.x + 75; y = parentPos.y; }
-    color = { background: '#fff', border: '#FFD700' }; 
+    if(parentPos) { x = parentPos.x + 55; y = parentPos.y - 35; }
+    color = { background: 'rgba(255, 255, 255, 0.2)', border: '#FFD700' }; 
   } else if (type === 'siblings') {
     icon = '⇄';
-    if(parentPos) { x = parentPos.x - 75; y = parentPos.y; }
+    if(parentPos) { x = parentPos.x - 55; y = parentPos.y - 35; }
     font = { size: 12, color: '#000' };
-    color = { background: '#fff', border: '#888' };
+    color = { background: 'rgba(255, 255, 255, 0.2)', border: '#888' };
   }
-
+  
   if (type !== 'parents' && type !== 'children' && typeof count === 'number' && count > 0) {
       label = count + '\n' + icon;
   } else {
