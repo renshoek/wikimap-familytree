@@ -55,12 +55,14 @@ function expandChildren(unionId, childrenIds) {
         shape: 'box',
         font: { size: 0 }, 
         x: pos.x, 
-        y: pos.y, 
+        y: pos.y,
+        lifeSpan: child.lifeSpan 
       });
       animationTargets.push({ id: child.id, x: currentX, y: startY, fontSize: 14 });
     }
     if (!edges.get({ filter: e => e.from === unionId && e.to === child.id }).length) {
-      newEdges.push({ from: unionId, to: child.id, arrows: 'to', color: '#666', width: 0.5 });
+      // UPDATED: Reduced length to 150
+      newEdges.push({ from: unionId, to: child.id, arrows: 'to', color: '#666', width: 0.5, length: 150 });
     }
     currentX += 160;
   });
@@ -92,7 +94,7 @@ function expandParents(childId, parents, visited = new Set()) {
   lockNodeTemporarily(childId);
 
   const pos = getPosition(childId);
-  const startY = pos.y - 250; 
+  const startY = pos.y - 200; // UPDATED: Changed from -250 to -200 to spawn closer
   let startX = pos.x;
   
   const levelNodes = nodes.get({
@@ -126,6 +128,7 @@ function expandParents(childId, parents, visited = new Set()) {
         font: { size: 0 }, 
         x: pos.x,    
         y: pos.y,
+        lifeSpan: p.lifeSpan 
       });
       animationTargets.push({ id: p.id, x: targetX, y: startY, fontSize: 14 });
     }
@@ -135,12 +138,14 @@ function expandParents(childId, parents, visited = new Set()) {
   const createEdgeSafe = (from, to) => {
       const exists = edges.get({ filter: e => e.from === from && e.to === to }).length > 0;
       if (!exists) {
-          edges.add({ from: from, to: to, arrows: 'to', color: '#666', width: 0.5 });
+          // UPDATED: Reduced length to 150
+          edges.add({ from: from, to: to, arrows: 'to', color: '#666', width: 0.5, length: 150 });
       }
   };
 
   if (parents.length === 2) {
-    const unionY = startY + 60;
+    // UPDATED: Union Y adjusted to be closer (approx 100 below parents)
+    const unionY = startY + 100;
     const unionId = createUnionNode(parents[0].id, parents[1].id, 0, startX, unionY);
     
     if (!nodes.get(unionId)) { 
@@ -211,6 +216,7 @@ function expandSpouses(nodeId) {
         font: { size: 0 }, 
         x: pos.x,         
         y: pos.y,
+        lifeSpan: spouse.lifeSpan
       });
       animationTargets.push({ id: spouse.id, x: targetX, y: pos.y, fontSize: 14 });
       expandNode(spouse.id, true);
@@ -221,7 +227,8 @@ function expandSpouses(nodeId) {
 
     const finalSpouseX = (nodes.get(spouse.id) ? (animationTargets.find(t=>t.id===spouse.id)?.x || getPosition(spouse.id).x) : targetX);
     const unionX = (pos.x + finalSpouseX) / 2;
-    const unionY = pos.y + 60; 
+    // UPDATED: Spawn offset set to 100 to appear closer
+    const unionY = pos.y + 100; 
 
     const unionChildren = allChildren.filter(c => {
         if (!c.otherParents || c.otherParents.length === 0) return false;
@@ -255,7 +262,6 @@ function expandSpouses(nodeId) {
 function expandNode(id, isSilent = false) {
   if (!isSilent) startLoading();
 
-  // UPDATED: Start local loading
   if (window.loadingNodes) {
       window.loadingNodes.add(id);
       if (window.startSpinnerLoop) window.startSpinnerLoop();
@@ -266,7 +272,6 @@ function expandNode(id, isSilent = false) {
   else {
     const node = nodes.get(id);
     if (!node) { 
-        // Cleanup if node doesn't exist
         if (window.loadingNodes) window.loadingNodes.delete(id);
         stopLoading(); 
         return Promise.resolve(null); 
@@ -274,19 +279,18 @@ function expandNode(id, isSilent = false) {
 
     if (/^Q\d+$/.test(id)) {
         promise = getPageById(id, unwrap(node.label)).then(data => {
-            const finalId = renameNode(id, data.redirectedTo, data.id, data.gender);
+            const finalId = renameNode(id, data.redirectedTo, data.id, data.gender, data.lifeSpan);
             data.id = finalId; window.familyCache[finalId] = data; return data;
         });
     } else {
         promise = getSubPages(unwrap(node.label)).then(data => {
-            const finalId = renameNode(id, data.redirectedTo, data.id, data.gender);
+            const finalId = renameNode(id, data.redirectedTo, data.id, data.gender, data.lifeSpan);
             data.id = finalId; window.familyCache[finalId] = data; return data;
         });
     }
   }
 
   return promise.then(data => {
-    // UPDATED: Stop local loading
     if (window.loadingNodes) window.loadingNodes.delete(id);
 
     if (!data) return null;
@@ -313,7 +317,6 @@ function expandNode(id, isSilent = false) {
     if (!isSilent) stopLoading();
     return data;
   }).catch(err => { 
-      // UPDATED: Stop local loading on error
       if (window.loadingNodes) window.loadingNodes.delete(id);
       console.error(err); 
       if(!isSilent) stopLoading();
@@ -369,6 +372,7 @@ window.toggleSiblings = function(nodeId) {
           font: { size: 0 }, 
           x: pos.x,         
           y: pos.y,
+          lifeSpan: sib.lifeSpan
         });
         animationTargets.push({ id: sib.id, x: targetX, y: pos.y, fontSize: 14 });
         siblingsToExpand.push(sib.id);
