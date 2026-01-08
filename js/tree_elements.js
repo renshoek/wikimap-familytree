@@ -11,27 +11,19 @@ function updateUnionState(unionId, state) {
     let color = window.COLORS ? window.COLORS.union : '#444';
     let fontSize = 0;
 
-    // state can be:
-    // 1. Number (count) -> Collapsed, show count.
-    // 2. 'expanded'     -> Expanded, show '✕'.
-    // 3. false/null     -> Empty/Hidden (dot).
-
     if (typeof state === 'number' && state > 0) {
-        // COLLAPSED with children: Show Count
         label = state.toString();
         shape = 'circle';
         size = 15;
         color = { background: '#fff', border: '#444' };
         fontSize = 14;
     } else if (state === 'expanded') {
-        // EXPANDED: Show Close Button
         label = '✕'; 
         shape = 'circle'; 
         size = 15;
         color = { background: '#fff', border: '#444' }; 
         fontSize = 14;
     } 
-    // If state is 0 or false, stay as dot (connector only).
 
     nodes.update({
         id: unionId,
@@ -50,22 +42,23 @@ function createUnionNode(p1Id, p2Id, childrenCount, x, y) {
   const unionId = `union_${ids[0]}_${ids[1]}`;
 
   if (!nodes.get(unionId)) {
-    // 1. Create Basic Node
     nodes.add({
       id: unionId,
       x: x, 
       y: y,
       isUnion: true, 
       spouseIds: ids,
+      mass: 0.1 
     });
 
     // 2. Connect Partners to the Union
+    // UPDATED: Set length to 180 to match UNION_OFFSET_Y
     edges.add([
-      { from: p1Id, to: unionId, color: '#666', width: 1.5 },
-      { from: p2Id, to: unionId, color: '#666', width: 1.5 }
+      { from: p1Id, to: unionId, color: '#666', width: 1.5, length: 130 },
+      { from: p2Id, to: unionId, color: '#666', width: 1.5, length: 130 }
     ]);
     
-    // 3. Bind spouses physically (invisible edge)
+    // 3. Bind spouses physically
     const spouseEdgeId = `spouse_bind_${ids[0]}_${ids[1]}`;
     if (!edges.get(spouseEdgeId)) {
         edges.add({
@@ -74,7 +67,7 @@ function createUnionNode(p1Id, p2Id, childrenCount, x, y) {
             to: p2Id,
             color: { opacity: 0 }, 
             physics: true,         
-            length: 100,           
+            length: 120,          
             width: 0,
             smooth: false,
             dashes: false,
@@ -83,9 +76,7 @@ function createUnionNode(p1Id, p2Id, childrenCount, x, y) {
     }
   }
   
-  // Show the number immediately (Collapsed State)
   updateUnionState(unionId, childrenCount);
-  
   return unionId;
 }
 
@@ -100,7 +91,7 @@ function addTriggerNode(parentId, type, count, x, y) {
   const parentPos = getPosition(parentId);
 
   if (type === 'children') {
-    return; // Children triggers are handled by Union nodes usually
+    return;
   } else if (type === 'parents') {
     icon = '▲'; 
     if(parentPos) { x = parentPos.x; y = parentPos.y - 35; }
