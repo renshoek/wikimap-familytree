@@ -3,9 +3,9 @@
 // CONFIGURATION
 const SPACING_X = 160; 
 const SPACING_Y = 220; 
-const UNION_OFFSET_Y = 60; // Vertical distance from Parent to Union
+const UNION_OFFSET_Y = 160; // Vertical distance from Parent to Union
 const MIN_NODE_GAP = 20; 
-const BASE_EDGE_LENGTH = 300; 
+const BASE_EDGE_LENGTH = 200; 
 
 // -- HELPER: RECENTER UNIONS --
 function recenterUnions(specificUnionIds = null) {
