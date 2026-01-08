@@ -5,11 +5,11 @@ let lastClickedNode = null;
 
 // DEFINED DEFAULTS (Updated to match current system)
 const PHYSICS_DEFAULTS = {
-    gravitationalConstant: -7000, 
+    gravitationalConstant: -4500, 
     centralGravity: 0.02,         
     springLength: 120,            
-    springConstant: 0.005,
-    damping: 0.9,
+    springConstant: 0.007, 
+    damping: 0.2,
     avoidOverlap: 0.5
 };
 
@@ -152,8 +152,10 @@ function bindNetwork() {
   network.on('afterDrawing', (ctx) => {
     const allNodes = nodes.get();
     
-    // 1. Draw PIN Indicators
+    ctx.save();
+    
     allNodes.forEach(n => {
+       // 1. Draw PIN Indicators
        if (n.fixed === true || (n.fixed && n.fixed.x && n.fixed.y)) {
            const pos = network.getPositions([n.id])[n.id];
            if (pos) {
@@ -163,15 +165,32 @@ function bindNetwork() {
                ctx.fillText("📌", pos.x + 20, pos.y - 15);
            }
        }
+       
+       // 2. Draw Floating LifeSpan (Year of Birth - Death) under the node
+       if (n.lifeSpan) {
+           try {
+               const box = network.getBoundingBox(n.id); // Get bounding box of the node
+               if (box) {
+                   ctx.font = "12px Arial"; // Subtle small text
+                   ctx.fillStyle = "#666";  // Subtle grey
+                   ctx.textAlign = "center";
+                   ctx.textBaseline = "top";
+                   // Draw centered below the node
+                   const centerX = (box.left + box.right) / 2;
+                   ctx.fillText(n.lifeSpan, centerX, box.bottom + 5);
+               }
+           } catch(e) {
+               // Ignore errors if bounding box isn't ready
+           }
+       }
     });
 
-    // 2. NEW: Draw LOADING Indicators
+    // 3. Draw LOADING Indicators
     if (window.loadingNodes && window.loadingNodes.size > 0) {
         const now = performance.now();
         const angle = (now / 150); // Speed factor (smaller = faster)
         
         window.loadingNodes.forEach(nodeId => {
-            // Check existence (in case deleted mid-load)
             if (!nodes.get(nodeId)) { 
                 window.loadingNodes.delete(nodeId); 
                 return; 
@@ -186,12 +205,13 @@ function bindNetwork() {
                 ctx.beginPath();
                 ctx.strokeStyle = '#555';
                 ctx.lineWidth = 2;
-                // Draw arc
                 ctx.arc(x, y, r, angle, angle + 4.5); 
                 ctx.stroke();
             }
         });
     }
+    
+    ctx.restore();
   });
 
   updateSelectionButtons();
@@ -396,15 +416,12 @@ function bindDebug() {
     
     if (!btnTrigger || !panel) return;
 
-    function setInputValues(p) {
+function setInputValues(p) {
         document.getElementById('opt-gravity').value = p.gravitationalConstant;
         document.getElementById('val-gravity').textContent = p.gravitationalConstant;
 
         document.getElementById('opt-central').value = p.centralGravity;
         document.getElementById('val-central').textContent = p.centralGravity;
-
-        document.getElementById('opt-springlen').value = p.springLength;
-        document.getElementById('val-springlen').textContent = p.springLength;
 
         document.getElementById('opt-springk').value = p.springConstant;
         document.getElementById('val-springk').textContent = p.springConstant;
@@ -448,7 +465,6 @@ function bindDebug() {
                 barnesHut: {
                     gravitationalConstant: Number(document.getElementById('opt-gravity').value),
                     centralGravity: Number(document.getElementById('opt-central').value),
-                    springLength: Number(document.getElementById('opt-springlen').value),
                     springConstant: Number(document.getElementById('opt-springk').value),
                     damping: Number(document.getElementById('opt-damping').value)
                 }
@@ -458,13 +474,11 @@ function bindDebug() {
         
         document.getElementById('val-gravity').textContent = opts.physics.barnesHut.gravitationalConstant;
         document.getElementById('val-central').textContent = opts.physics.barnesHut.centralGravity;
-        document.getElementById('val-springlen').textContent = opts.physics.barnesHut.springLength;
         document.getElementById('val-springk').textContent = opts.physics.barnesHut.springConstant;
         document.getElementById('val-damping').textContent = opts.physics.barnesHut.damping;
     }
 
-    ['opt-gravity', 'opt-central', 'opt-springlen', 'opt-springk', 'opt-damping'].forEach(id => {
-        const el = document.getElementById(id);
+['opt-gravity', 'opt-central', 'opt-springk', 'opt-damping'].forEach(id => {        const el = document.getElementById(id);
         if(el) el.addEventListener('input', updatePhysics);
     });
 
