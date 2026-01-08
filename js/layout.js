@@ -81,10 +81,10 @@ window.applyTreeForces = function() {
         }
     }
 
-    // 2. EDGE FORCES
+// 2. EDGE FORCES
     Object.values(edgesBody).forEach(edge => {
-        // UPDATED: Ignore sibling edges (physics: false) in custom calculations
-        if (edge.options.physics === false) return;
+        // UPDATED: Ignore non-physical edges, BUT allow sibling edges (dashes: true)
+        if (edge.options.physics === false && edge.options.dashes !== true) return;
 
         const n1 = nodesBody[edge.fromId];
         const n2 = nodesBody[edge.toId];
@@ -92,11 +92,29 @@ window.applyTreeForces = function() {
         if(!n1 || !n2) return;
         if(n1.options.physics === false || n2.options.physics === false) return;
 
-        // -- DYNAMIC MAX LENGTH & STIFFNESS --
         const dx = n1.x - n2.x;
         const dy = n1.y - n2.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
-        
+
+        // -- SIBLING LEASH (Max 600px) --
+        if (edge.options.dashes === true) {
+             // Only apply force if they drift further than 400px
+             if (dist > 600) {
+                 const diff = dist - 600;
+                 const correction = diff * 0.05; // Gentle correction to prevent snapping
+                 
+                 const angle = Math.atan2(dy, dx);
+                 const cx = Math.cos(angle) * correction;
+                 const cy = Math.sin(angle) * correction;
+                 
+                 n1.x -= cx * 0.5;
+                 n1.y -= cy * 0.5;
+                 n2.x += cx * 0.5;
+                 n2.y += cy * 0.5;
+             }
+             // Return early so standard parent/child logic doesn't apply to siblings
+             return; 
+        }        
         // Calculate "Crowdedness" (Degree)
         const d1 = n1.edges ? n1.edges.length : 1;
         const d2 = n2.edges ? n2.edges.length : 1;
@@ -208,11 +226,11 @@ window.updateTriggerPositions = function() {
      if (type === 'parents') {
          newY = parent.y - 35;
      } else if (type === 'siblings') {
-         newX = parent.x - 30;
-         newY = parent.y - 30;
+         newX = parent.x - 55;
+         newY = parent.y - 35;
      } else if (type === 'spouses') {
-         newX = parent.x + 40;
-         newY = parent.y - 30;
+         newX = parent.x + 55;
+         newY = parent.y - 35;
      }
 
      trigger.x = newX;

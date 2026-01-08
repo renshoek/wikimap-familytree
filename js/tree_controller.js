@@ -1,3 +1,4 @@
+
 /* global nodes, edges, network, getNormalizedId, wordwrap, unwrap, getSubPages, getPageById, startLoading, stopLoading, fixOverlap, recenterUnions, animateNodes */
 /* global getGenderColor, getPosition, lockNodeTemporarily, renameNode, updateUnionState, createUnionNode, addTriggerNode, expandNode */
 
@@ -144,15 +145,42 @@ function expandParents(childId, parents, visited = new Set()) {
   };
 
   if (parents.length === 2) {
+    // UPDATED: Calculate children count based on child + siblings
+    let childCount = 1; // Start with the node itself
+    const childCache = window.familyCache[childId];
+    if (childCache && childCache.family && childCache.family.siblings) {
+        childCount += childCache.family.siblings.length;
+    }
+
     // UPDATED: Union Y adjusted to be closer (approx 100 below parents)
     const unionY = startY + 100;
-    const unionId = createUnionNode(parents[0].id, parents[1].id, 0, startX, unionY);
+    const unionId = createUnionNode(parents[0].id, parents[1].id, childCount, startX, unionY);
     
     if (!nodes.get(unionId)) { 
         nodes.update({ id: unionId, x: pos.x, y: pos.y }); 
         animationTargets.push({ id: unionId, x: startX, y: unionY });
     }
     createEdgeSafe(unionId, childId);
+
+    // NEW: Auto-fetch parent data to find TRUE children count (hidden siblings)
+    const p1 = parents[0].id;
+    const p2 = parents[1].id;
+    expandNode(p1, true).then(data => {
+        if (data && nodes.get(unionId)) {
+             const allChildren = data.family.children;
+             // Filter children who share the other parent (p2)
+             const unionChildren = allChildren.filter(c => c.otherParents && c.otherParents.includes(p2));
+             
+             if (unionChildren.length > 0) {
+                 nodes.update({ id: unionId, childrenIds: unionChildren });
+                 const curr = nodes.get(unionId);
+                 // Only update the label (e.g. "4") if it isn't currently expanded ("✕")
+                 if (curr && curr.label !== '✕') {
+                     updateUnionState(unionId, unionChildren.length);
+                 }
+             }
+        }
+    });
 
   } else if (parents.length === 1) {
     createEdgeSafe(parents[0].id, childId);
@@ -433,13 +461,44 @@ window.handleTriggerClick = function(nodeId) {
   if (!node) return;
 
   if (node.isUnion) {
-     if (node.childrenIds && node.childrenIds.length > 0) {
-         const firstChildId = node.childrenIds[0].id;
-         if (nodes.get(firstChildId)) {
-             collapseChildren(nodeId, node.childrenIds);
-         } else {
-             expandChildren(nodeId, node.childrenIds);
+     const p1Id = node.spouseIds ? node.spouseIds[0] : null;
+     const p2Id = node.spouseIds ? node.spouseIds[1] : null;
+
+     const proceed = () => {
+         const updatedNode = nodes.get(nodeId);
+         const cIds = updatedNode.childrenIds;
+         if (cIds && cIds.length > 0) {
+             // UPDATED: Check if ALL children are present.
+             // If the user started with one child (A) and the union now has [A, B, C],
+             // logic based on just cIds[0] (A) would say "present" -> Collapse.
+             // But the user wants to see B and C.
+             // So if ANY child is missing, we EXPAND.
+             const allPresent = cIds.every(c => nodes.get(c.id));
+             
+             if (allPresent) {
+                 collapseChildren(nodeId, cIds);
+             } else {
+                 expandChildren(nodeId, cIds);
+             }
          }
+     };
+
+     if (p1Id && p2Id) {
+         startLoading();
+         // Always ensure we have the parent's data (if cached, promise resolves instantly)
+         expandNode(p1Id, true).then(data => {
+             if (data) {
+                 const allChildren = data.family.children;
+                 const unionChildren = allChildren.filter(c => c.otherParents && c.otherParents.includes(p2Id));
+                 if (unionChildren.length > 0) {
+                     nodes.update({ id: nodeId, childrenIds: unionChildren });
+                 }
+             }
+             stopLoading();
+             proceed();
+         });
+     } else {
+         proceed();
      }
      return;
   }
