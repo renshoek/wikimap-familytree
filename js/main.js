@@ -84,7 +84,12 @@ const options = {
   nodes: {
     shape: 'box', 
     margin: 10,
-    font: { size: 14, face: 'arial' },
+    font: { 
+        size: 14, 
+        face: 'arial',
+        multi: 'md',  // UPDATED: Enable Markdown support for formatting
+        ital: { color: '#777777', size: 12 } // UPDATED: Define subtle gray color for italics (used for dates)
+    },
     borderWidth: 1,
     shadow: true,
     fixed: { x: false, y: false }
@@ -93,7 +98,7 @@ const options = {
     smooth: {
       type: 'cubicBezier', 
       forceDirection: 'vertical',
-      roundness: 0.4 
+      roundness: 0.35 // UPDATED: Lower value makes lines less "bendy" (was 0.4)
     },
     color: { color: '#666666', highlight: '#000000' }
   },
@@ -107,12 +112,12 @@ const options = {
     enabled: true,
     solver: 'barnesHut',
     barnesHut: {
-      gravitationalConstant: -7000, 
+      gravitationalConstant: -4500, 
       centralGravity: 0.02,         
       springLength: 120,            
-      springConstant: 0.005,        
-      damping: 0.9,                 
-      avoidOverlap: 0.5             
+      springConstant: 0.007,       
+      damping: 0.2,                 
+      avoidOverlap: 0.3             
     },
     minVelocity: 0.1, 
     stabilization: {

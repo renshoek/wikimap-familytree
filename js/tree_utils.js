@@ -6,7 +6,7 @@ window.siblingState = {};
 window.hoveredNodeId = null;
 window.activeTriggers = new Set(); 
 
-// NEW: Track nodes that are currently fetching data
+// Track nodes that are currently fetching data
 window.loadingNodes = new Set();
 let spinnerLoopActive = false;
 
@@ -61,13 +61,14 @@ function getPosition(nodeId) {
 }
 
 // Lock Node Temporarily to prevent it flying away during expansion
-function lockNodeTemporarily(nodeId, ms = 3000) {
+// UPDATED: Default is now 1000ms (1 second)
+function lockNodeTemporarily(nodeId, ms = 1000) {
   if (!nodes.get(nodeId)) return;
   
   // 1. Pin the node (Visual Lock)
   nodes.update({ id: nodeId, fixed: true });
 
-  // 2. Schedule Unpin after 3 seconds
+  // 2. Schedule Unpin after 1 second
   setTimeout(() => {
     if (nodes.get(nodeId)) {
         nodes.update({ id: nodeId, fixed: false });
@@ -88,14 +89,16 @@ function lockNodeTemporarily(nodeId, ms = 3000) {
 }
 
 // Rename a node
-function renameNode(oldId, newName, newQid, gender) {
+function renameNode(oldId, newName, newQid, gender, lifeSpan) {
   const oldNode = nodes.get(oldId);
   const newId = newQid || getNormalizedId(newName);
   
+  // UPDATED: Do NOT append lifeSpan to label. Store it in the node object.
   const updateData = { 
     id: newId, 
     label: wordwrap(newName, 15),
-    color: { background: getGenderColor(gender), border: '#666' }
+    color: { background: getGenderColor(gender), border: '#666' },
+    lifeSpan: lifeSpan // Store here for custom drawing
   };
 
   if (newId !== oldId) {
