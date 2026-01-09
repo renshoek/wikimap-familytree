@@ -91,7 +91,9 @@ function addTriggerNode(parentId, type, count, x, y) {
   const parentPos = getPosition(parentId);
 
   if (type === 'children') {
-    return;
+    icon = '▼';
+    if(parentPos) { x = parentPos.x; y = parentPos.y + 55; }
+    color = { background: 'rgba(255, 255, 255, 0.2)', border: '#ccc' };
   } else if (type === 'parents') {
     icon = '▲'; 
     if(parentPos) { x = parentPos.x; y = parentPos.y - 35; }
