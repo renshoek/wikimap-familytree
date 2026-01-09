@@ -1,4 +1,4 @@
-/* global nodes, edges, network, getNormalizedId, wordwrap */
+/* global nodes, edges, network, getNormalizedId, wordwrap, addTriggerNode */
 
 // -- GLOBAL STATE --
 window.familyCache = {}; 
