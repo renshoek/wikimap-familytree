@@ -1,4 +1,3 @@
-
 /* global nodes, edges, network, getNormalizedId, wordwrap, unwrap, getSubPages, getPageById, startLoading, stopLoading, fixOverlap, recenterUnions, animateNodes */
 /* global getGenderColor, getPosition, lockNodeTemporarily, renameNode, updateUnionState, createUnionNode, addTriggerNode, expandNode */
 
@@ -25,6 +24,8 @@ function collapseChildren(unionId, childrenIds) {
       triggersToRemove.push(`trigger_parents_${id}`);
       triggersToRemove.push(`trigger_spouses_${id}`);
       triggersToRemove.push(`trigger_siblings_${id}`);
+      // Also remove any child triggers if the child itself had them
+      triggersToRemove.push(`trigger_children_${id}`);
   });
 
   nodes.remove([...idsToRemove, ...triggersToRemove]);
@@ -88,6 +89,74 @@ function expandChildren(unionId, childrenIds) {
   childrenIds.forEach(c => expandNode(c.id, true));
 }
 
+// NEW: Function to expand children directly from a parent (when no spouses exist)
+function expandChildrenSingle(parentId) {
+  const data = window.familyCache[parentId];
+  if (!data || !data.family || !data.family.children) return;
+
+  lockNodeTemporarily(parentId);
+
+  const pos = getPosition(parentId);
+  // Place children in a row below the parent. 
+  // 220px is typical level spacing to match standard tree structure.
+  const startY = pos.y + 220; 
+  const startX = pos.x;
+  
+  const children = data.family.children;
+  
+  const newNodes = [];
+  const newEdges = [];
+  const animationTargets = [];
+  
+  const totalW = (children.length - 1) * 160; 
+  let currentX = startX - (totalW / 2);
+
+  children.forEach(child => {
+    if (!nodes.get(child.id)) {
+      newNodes.push({
+        id: child.id,
+        label: wordwrap(child.label, 15),
+        color: { background: getGenderColor(child.gender), border: '#666' },
+        shape: 'box',
+        font: { size: 0 }, 
+        x: pos.x, 
+        y: pos.y,
+        lifeSpan: child.lifeSpan 
+      });
+      animationTargets.push({ id: child.id, x: currentX, y: startY, fontSize: 14 });
+    }
+    
+    // Check if edge exists from parent to child
+    const edgeExists = edges.get({ 
+        filter: e => e.from === parentId && e.to === child.id 
+    }).length > 0;
+
+    if (!edgeExists) {
+      newEdges.push({ from: parentId, to: child.id, arrows: 'to', color: '#666', width: 0.5, length: 220 });
+    }
+    currentX += 160;
+  });
+
+  if (newNodes.length > 0) nodes.add(newNodes);
+  if (newEdges.length > 0) edges.add(newEdges);
+  
+  // Remove the trigger button
+  const triggerId = `trigger_children_${parentId}`;
+  if (nodes.get(triggerId)) {
+      nodes.remove(triggerId);
+      window.activeTriggers.delete(triggerId);
+  }
+
+  if (animationTargets.length > 0) {
+      if(window.animateNodes) window.animateNodes(animationTargets);
+      setTimeout(() => { if(window.fixOverlap) window.fixOverlap(startY); }, 650);
+  } else {
+      if(window.fixOverlap) window.fixOverlap(startY);
+  }
+  
+  children.forEach(c => expandNode(c.id, true));
+}
+
 function expandParents(childId, parents, visited = new Set()) {
   if (visited.has(childId)) return;
   visited.add(childId);
@@ -95,7 +164,7 @@ function expandParents(childId, parents, visited = new Set()) {
   lockNodeTemporarily(childId);
 
   const pos = getPosition(childId);
-  const startY = pos.y - 200; // UPDATED: Changed from -250 to -200 to spawn closer
+  const startY = pos.y - 200; 
   let startX = pos.x;
   
   const levelNodes = nodes.get({
@@ -139,20 +208,17 @@ function expandParents(childId, parents, visited = new Set()) {
   const createEdgeSafe = (from, to) => {
       const exists = edges.get({ filter: e => e.from === from && e.to === to }).length > 0;
       if (!exists) {
-          // UPDATED: Reduced length to 150
           edges.add({ from: from, to: to, arrows: 'to', color: '#666', width: 0.5, length: 150 });
       }
   };
 
   if (parents.length === 2) {
-    // UPDATED: Calculate children count based on child + siblings
-    let childCount = 1; // Start with the node itself
+    let childCount = 1; 
     const childCache = window.familyCache[childId];
     if (childCache && childCache.family && childCache.family.siblings) {
         childCount += childCache.family.siblings.length;
     }
 
-    // UPDATED: Union Y adjusted to be closer (approx 100 below parents)
     const unionY = startY + 100;
     const unionId = createUnionNode(parents[0].id, parents[1].id, childCount, startX, unionY);
     
@@ -162,19 +228,16 @@ function expandParents(childId, parents, visited = new Set()) {
     }
     createEdgeSafe(unionId, childId);
 
-    // NEW: Auto-fetch parent data to find TRUE children count (hidden siblings)
     const p1 = parents[0].id;
     const p2 = parents[1].id;
     expandNode(p1, true).then(data => {
         if (data && nodes.get(unionId)) {
              const allChildren = data.family.children;
-             // Filter children who share the other parent (p2)
              const unionChildren = allChildren.filter(c => c.otherParents && c.otherParents.includes(p2));
              
              if (unionChildren.length > 0) {
                  nodes.update({ id: unionId, childrenIds: unionChildren });
                  const curr = nodes.get(unionId);
-                 // Only update the label (e.g. "4") if it isn't currently expanded ("✕")
                  if (curr && curr.label !== '✕') {
                      updateUnionState(unionId, unionChildren.length);
                  }
@@ -255,7 +318,6 @@ function expandSpouses(nodeId) {
 
     const finalSpouseX = (nodes.get(spouse.id) ? (animationTargets.find(t=>t.id===spouse.id)?.x || getPosition(spouse.id).x) : targetX);
     const unionX = (pos.x + finalSpouseX) / 2;
-    // UPDATED: Spawn offset set to 100 to appear closer
     const unionY = pos.y + 100; 
 
     const unionChildren = allChildren.filter(c => {
@@ -331,6 +393,14 @@ function expandNode(id, isSilent = false) {
        if (!hideSpouseTrigger) {
            addTriggerNode(data.id, 'spouses', unshownSpouses);
        }
+    } else {
+       // NEW: No spouses, but check if we have children to show
+       if (data.family.children && data.family.children.length > 0) {
+           const unshownChildren = data.family.children.filter(c => !nodes.get(c.id)).length;
+           if (unshownChildren > 0) {
+               addTriggerNode(data.id, 'children', unshownChildren);
+           }
+       }
     }
 
     if (data.family.parents.length > 0) {
@@ -369,6 +439,7 @@ window.toggleSiblings = function(nodeId) {
        triggersToRemove.push(`trigger_parents_${id}`);
        triggersToRemove.push(`trigger_spouses_${id}`);
        triggersToRemove.push(`trigger_siblings_${id}`);
+       triggersToRemove.push(`trigger_children_${id}`);
     });
     nodes.remove([...ids, ...triggersToRemove]);
     triggersToRemove.forEach(t => window.activeTriggers.delete(t));
@@ -468,11 +539,7 @@ window.handleTriggerClick = function(nodeId) {
          const updatedNode = nodes.get(nodeId);
          const cIds = updatedNode.childrenIds;
          if (cIds && cIds.length > 0) {
-             // UPDATED: Check if ALL children are present.
-             // If the user started with one child (A) and the union now has [A, B, C],
-             // logic based on just cIds[0] (A) would say "present" -> Collapse.
-             // But the user wants to see B and C.
-             // So if ANY child is missing, we EXPAND.
+            
              const allPresent = cIds.every(c => nodes.get(c.id));
              
              if (allPresent) {
@@ -521,5 +588,9 @@ window.handleTriggerClick = function(nodeId) {
   }
   else if (trigger.triggerType === 'spouses') {
       expandSpouses(trigger.parentId);
+  }
+  // NEW: Handle children trigger
+  else if (trigger.triggerType === 'children') {
+      expandChildrenSingle(trigger.parentId);
   }
 };
