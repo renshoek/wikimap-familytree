@@ -1,4 +1,4 @@
-/* global nodes, network, updateNodeValue */
+/* global nodes, edges, network, updateNodeValue */
 
 // CONFIGURATION
 const SPACING_X = 160; 
@@ -41,6 +41,9 @@ window.recenterUnions = recenterUnions;
 // -- TREE GRAVITY (Custom Physics) --
 window.applyTreeForces = function() {
     if (!network || !network.body) return;
+    
+    // NOTE: Throttling removed to prevent shaking. Logic runs every frame.
+    
     const nodesBody = network.body.nodes;
     const edgesBody = network.body.edges;
     
@@ -48,7 +51,6 @@ window.applyTreeForces = function() {
     const TARGET_LEVEL_HEIGHT = 280; 
 
     // 1. GLOBAL STABILIZER (Stop Infinite Drift on X and Y)
-    // Calculate average position of the system
     let totalX = 0;
     let totalY = 0;
     let nodeCount = 0;
@@ -225,6 +227,8 @@ window.updateTriggerPositions = function() {
 
      if (type === 'parents') {
          newY = parent.y - 35;
+     } else if (type === 'children') {
+         newY = parent.y + 55; 
      } else if (type === 'siblings') {
          newX = parent.x - 55;
          newY = parent.y - 35;
@@ -288,7 +292,8 @@ function animateNodes(updates) {
   requestAnimationFrame(step);
 }
 
-function fixOverlap(yLevel) {
+// UPDATED: Corrected Single-Pass Overlap Logic
+window.fixOverlap = function(yLevel) {
   const tolerance = 20; 
   const nodesOnLevel = nodes.get({
     filter: n => Math.abs(n.y - yLevel) < tolerance
@@ -296,10 +301,12 @@ function fixOverlap(yLevel) {
 
   if (nodesOnLevel.length < 2) return;
 
+  // Ensure sorted by X
   nodesOnLevel.sort((a, b) => a.x - b.x);
 
   const updates = [];
-  let didMove = false;
+  let didMove = false; 
+  let accumulatedPush = 0;
 
   for (let i = 0; i < nodesOnLevel.length - 1; i++) {
     const leftNode = nodesOnLevel[i];
@@ -307,27 +314,28 @@ function fixOverlap(yLevel) {
 
     const leftW = (leftNode.isUnion || leftNode.isTrigger) ? 30 : 160;
     const rightW = (rightNode.isUnion || rightNode.isTrigger) ? 30 : 160;
-
     const minGap = (leftW/2 + rightW/2) + MIN_NODE_GAP;
+    
+    // Check distance relative to the potentially pushed left node
     const currentDist = rightNode.x - leftNode.x;
 
     if (currentDist < minGap) {
-      const pushDistance = minGap - currentDist;
-      
-      for (let j = i + 1; j < nodesOnLevel.length; j++) {
-        const targetId = nodesOnLevel[j].id;
-        const existingUpdate = updates.find(u => u.id === targetId);
-        const currentX = existingUpdate ? existingUpdate.x : nodesOnLevel[j].x;
-        
-        const newX = currentX + pushDistance;
+        const pushNeeded = minGap - currentDist;
+        accumulatedPush += pushNeeded;
+        didMove = true;
+    }
 
-        if(existingUpdate) {
+    // Apply TOTAL accumulated push to the current right node
+    if (accumulatedPush > 0) {
+        const newX = rightNode.x + accumulatedPush;
+        
+        // Check if we already have an update for this node
+        const existingUpdate = updates.find(u => u.id === rightNode.id);
+        if (existingUpdate) {
             existingUpdate.x = newX;
         } else {
-            updates.push({ id: targetId, x: newX, y: nodesOnLevel[j].y });
+            updates.push({ id: rightNode.id, x: newX, y: rightNode.y });
         }
-      }
-      didMove = true;
     }
   }
 
@@ -336,7 +344,7 @@ function fixOverlap(yLevel) {
   } else {
     recenterUnions();
   }
-}
+};
 
 // EXPORTS
 window.animateNodes = animateNodes;
