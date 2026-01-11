@@ -162,7 +162,7 @@ function updateNodeValue(nodeId) {
   nodes.update({ 
     id: nodeId, 
     value: Math.max(1, degree),
-    mass: 1 // Forced to 1
+    mass: 0.5
   });
 }
 
