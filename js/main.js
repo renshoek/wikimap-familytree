@@ -10,23 +10,23 @@ window.initialExpanded = false;
 
 // -- MASTER LIST OF SUGGESTIONS --
 window.SUGGESTIONS = [
-    // British Monarchy & Royalty
-    "Queen Victoria", "Elizabeth II", "Charles III", "Henry VIII", "William the Conqueror",
-    "George III", "Mary, Queen of Scots", "Princess Diana", "Prince William", "Prince Harry",
-    "Richard III", "Edward VII", "George V", "George VI", "Victoria, Princess Royal",
+   // British Monarchy & Royalty
+   "Queen Victoria", "Elizabeth II", "King Charles III", "Henry VIII", "William the Conqueror",
+    "George III", "Mary, Queen of Scots", "Diana, Princess of Wales", "Prince William", "Prince Harry",
+    "Richard III", "Edward VII", "George V", "George VI", "Princess Victoria",
     "Edward Longshanks", "Alfred the Great", "Eleanor of Aquitaine", "Richard the Lionheart", "John, King of England",
 
     // European Royalty & Leaders
-    "Napoleon", "Louis XIV", "Marie Antoinette", "Charlemagne", "Empress Elisabeth of Austria",
+    "Napoleon", "Louis XIV", "Queen Marie Antoinette", "Charles the Great", "Empress Elisabeth of Austria",
     "Franz Joseph I of Austria", "Catherine the Great", "Peter the Great", "Nicholas II of Russia", "Ivan the Terrible",
     "Frederick the Great", "Maria Theresa", "Philip II of Spain", "Isabella I of Castile", "Ferdinand II of Aragon",
-    "Queen Margrethe II", "Carl XVI Gustaf", "Harald V of Norway", "Willem-Alexander of the Netherlands", "Philippe of Belgium",
+    "Frederik X", "Carl XVI Gustaf", "Harald V of Norway", "Willem-Alexander of the Netherlands", "Philippe of Belgium",
 
     // Ancient History
-    "Julius Caesar", "Augustus", "Alexander the Great", "Cleopatra", "Nero",
-    "Caligula", "Marcus Aurelius", "Constantine the Great", "Tutankhamun", "Ramses II",
-    "Nefertiti", "Hatshepsut", "Cyrus the Great", "Darius I", "Xerxes I",
-    "Pericles", "Leonidas I", "Hannibal", "Scipio Africanus", "Attila the Hun",
+    "Julius Caesar", "Gaius Octavius", "Alexander the Great", "Cleopatra VII", "Nero",
+    "Gaius Caesar Augustus Germanicus", "Marcus Aurelius", "Constantine the Great", "Tutankhamun", "Ramses II",
+    "Akhenaten", "Hatshepsut", "Cyrus the Great", "Darius I", "Xerxes I",
+    "Pericles the Younger", "Leonidas I", "Hannibal Barca", "Scipio Africanus", "Attila the Hun",
 
     // US Presidents & Figures
     "George Washington", "Abraham Lincoln", "Thomas Jefferson", "Theodore Roosevelt", "Franklin D. Roosevelt",
@@ -37,14 +37,14 @@ window.SUGGESTIONS = [
     // Science & Exploration
     "Albert Einstein", "Marie Curie", "Charles Darwin", "Isaac Newton", "Galileo Galilei",
     "Nikola Tesla", "Thomas Edison", "Leonardo da Vinci", "Stephen Hawking", "Ada Lovelace",
-    "Alan Turing", "Rosalind Franklin", "Louis Pasteur", "Alexander Graham Bell", "Wright Brothers",
+    "Alan Turing", "Rosalind Franklin", "Louis Pasteur", "Alexander Graham Bell", "Orville Wright",
     "Neil Armstrong", "Buzz Aldrin", "Yuri Gagarin", "Christopher Columbus", "Marco Polo",
 
     // Arts, Literature & Philosophy
     "William Shakespeare", "Charles Dickens", "Jane Austen", "Mark Twain", "Ernest Hemingway",
-    "J.R.R. Tolkien", "J.K. Rowling", "Agatha Christie", "Oscar Wilde", "Victor Hugo",
+    "J.R.R. Tolkien", "Joanne Rowling", "Agatha Christie", "Oscar Wilde", "Victor Hugo",
     "Wolfgang Amadeus Mozart", "Ludwig van Beethoven", "Johann Sebastian Bach", "Frederic Chopin", "Elvis Presley",
-    "Michael Jackson", "The Beatles", "Pablo Picasso", "Vincent van Gogh", "Salvador Dali",
+    "Michael Jackson", "John Lennon", "George Harrison", "Paul McCartney", "Pablo Picasso", "Vincent van Gogh", "Salvador Dali",
 
     // World Leaders & Activists
     "Winston Churchill", "Margaret Thatcher", "Nelson Mandela", "Mahatma Gandhi", "Martin Luther King Jr.",
@@ -53,10 +53,10 @@ window.SUGGESTIONS = [
     "Che Guevara", "Fidel Castro", "Mao Zedong", "Deng Xiaoping", "Sun Yat-sen",
 
     // Mythology & Religion
-    "Zeus", "Hercules", "Odin", "Thor", "Loki",
-    "Jesus", "Mary (mother of Jesus)", "King David", "King Solomon", "Moses",
-    "Prophet Muhammad", "Confucius", "Buddha", "Poseidon", "Hades",
-    "Athena", "Apollo", "Artemis", "Ares", "Aphrodite",
+    "Ζεύς", "Heracles", "Wōden", "Donar", "Hveðrungr",
+    "God the Father", "Mary, mother of Jesus", "King David", "King Salomon", "Moshe Rabbeinu",
+    "Prophet Muhammad", "Kong Qiu", "Siddhartha Gautama", "Poseidon", "Hā́idēs",
+    "Pallas Athena", "Apollōn", "Artemis Brauronia", "Acadalia",
 
     // Modern Business & Tech
     "Elon Musk", "Steve Jobs", "Bill Gates", "Mark Zuckerberg", "Jeff Bezos",
@@ -69,10 +69,52 @@ window.SUGGESTIONS = [
     "Madonna", "David Bowie", "Freddie Mercury", "Elton John", "Oprah Winfrey",
 
     // Miscellaneous Historical
-    "Genghis Khan", "Kublai Khan", "Tamerlane", "Suleiman the Magnificent", "Mehmed the Conqueror",
-    "Saladin", "Joan of Arc", "William Wallace", "Robert the Bruce", "Vlad the Impaler",
-    "Rasputin", "Geronimo", "Sitting Bull", "Pocahontas", "Sacagawea",
-    "Amelia Earhart", "Florence Nightingale", "Mother Teresa", "Rosa Parks", "Harriet Tubman"
+    "Chinggis Khan", "Kublai Khan", "Tamerlane the Great", "Suleiman the Magnificent", "Mehmed the Conqueror",
+    "Salah ad-Din Yusuf ibn Ayyub", "Joan of Arc", "William Wallace", "Robert the Bruce", "Vlad the Impaler",
+    "Grigori Rasputin", "Goyaałé", "Tȟatȟáŋka Íyotake", "Pocahontas", "Sacagawea",
+    "Amelia Earhart", "Florence Nightingale", "Mother Teresa", "Rosa Louise McCauley Parks", "Harriet Tubman",
+    "Chulalongkorn", "Bhumibol",
+
+    // -- NEW ADDITIONS (Sports, Cinema, Music, Philosophy, History) --
+    // Sports Legends
+    "Muhammad Ali", "Michael Jordan", "LeBron James", "Serena Williams",
+    "Pelé", "Lionel Messi", "Cristiano Ronaldo", "Roger Federer", "Tiger Woods",
+    "Kobe Bryant", "Shaquille O'Neal", "Wayne Gretzky", "Tom Brady",
+    "Lewis Hamilton", "Max Verstappen", "Novak Djokovic", "Rafael Nadal",
+    "Simone Biles", "Michael Phelps", "Jesse Owens",
+
+    // Cinema & Directors
+    "Steven Spielberg", "Alfred Hitchcock", "Quentin Tarantino", "Martin Scorsese",
+    "Meryl Streep", "Robert De Niro", "Leonardo DiCaprio",
+    "Bruce Lee", "Hayao Miyazaki", "Jim Henson",
+
+    // Music Legends
+    "Bob Dylan", "Bob Marley", "Jimi Hendrix", "Kurt Cobain", "Aretha Franklin",
+    "Frank Sinatra", "Louis Armstrong", "Miles Davis", "Taylor Swift", "Lady Gaga",
+    "Tupac Shakur", "Whitney Houston", "Celine Dion", "Mariah Carey",
+
+    // Philosophy & Thinkers
+    "Socrates", "Plato", "Aristotélēs", "René Descartes", "Immanuel Kant",
+    "Friedrich Nietzsche", "Karl Marx", "Dante Alighieri", "Ὅμηρος",
+
+    // Science & Math (Pre-20th Century & Modern)
+    "Pythagoras of Samos", "Euclid", "Archimedes of Syracuse", "Carl Sagan", "Richard Feynman",
+    "Sigmund Freud", "Carl Jung", "Jane Goodall", "Tim Berners-Lee", "Grace Hopper",
+
+    // Art & Architecture
+    "Michelangelo", "Rembrandt", "Claude Monet", "Frida Kahlo", "Andy Warhol",
+    "Frank Lloyd Wright", "Zaha Hadid", "Banksy", "Georgia O'Keeffe",
+
+    "Sun Tzu", "Cicero", "Hammurabi", "Al Capone",
+    "Harry Houdini", "P.T. Barnum", "Anne Frank",
+    "Helen Keller", "Malala Yousafzai", "Greta Thunberg", "Edward Snowden",
+   "Zoser",
+    "Gaius Julius Arminius", "Ibn Sina", "Miyamoto Musashi", "Zheng He",
+    "Leif Erikson", "Petrarch", "Nicolaus Copernicus", "Johannes Kepler",
+    "Tycho Brahe", "Paracelsus", "Guy Fawkes", "Simón Bolívar",
+    "Joseph Lister", "Ernest Shackleton",
+    "Julie d'Aubigny", "Gilgamesh", "Ramesses I", "Ramesses II", "Ramesses III",
+  
 ];
 
 const container = document.getElementById('container');
@@ -84,6 +126,7 @@ const options = {
   nodes: {
     shape: 'box', 
     margin: 10,
+    mass: 0.5, // ADDED: Halve the weight of nodes
     font: { 
         size: 14, 
         face: 'arial',
@@ -112,10 +155,10 @@ const options = {
     enabled: true,
     solver: 'barnesHut',
     barnesHut: {
-      gravitationalConstant: -4500, 
+      gravitationalConstant: -7000, 
       centralGravity: 0.02,         
       springLength: 120,            
-      springConstant: 0.007,       
+      springConstant: 0.009,       
       damping: 0.25,                 
       avoidOverlap: 0.3             
     },
