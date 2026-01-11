@@ -1,16 +1,17 @@
 /* global nodes, network, isTouchDevice, shepherd, updateNodeValue, handleTriggerClick, showSiblingToggle, hideSiblingToggle */
-/* global expandNode, traceBack, resetProperties, go, goRandom, clearNetwork, unwrap, addItem, Modal, edges, startLoading, stopLoading, getPersonDetails */
+/* global expandNode, traceBack, resetProperties, go, goRandom, clearNetwork, unwrap, addItem, Modal, edges, startLoading, stopLoading, getPersonDetails, hexToRGB */
 
 let lastClickedNode = null;
 let highlightedEdges = {}; // Stores original styles: id -> { color, width }
+let dimmedNodeIds = new Set(); // Stores ids of nodes currently dimmed
 
 // DEFINED DEFAULTS (Updated to match current system)
 const PHYSICS_DEFAULTS = {
-    gravitationalConstant: -4500,
+    gravitationalConstant: -7000,
     centralGravity: 0.02,
     springLength: 120,
-    springConstant: 0.007,
-    damping: 0.2, // Default, though user may have set 0.25 in main.js
+    springConstant: 0.009,
+    damping: 0.25,
     avoidOverlap: 0.5
 };
 
@@ -52,6 +53,7 @@ function deleteNodesWithTriggers(ids) {
 }
 
 function resetBloodline() {
+    // 1. Reset Edges
     const updates = [];
     for (const [id, style] of Object.entries(highlightedEdges)) {
         // Handle potentially missing edges if they were deleted
@@ -66,6 +68,46 @@ function resetBloodline() {
     }
     if (updates.length > 0) edges.update(updates);
     highlightedEdges = {};
+
+    // 2. Reset Nodes (Restore Opacity and Text Color)
+    if (dimmedNodeIds.size > 0) {
+        const nodeUpdates = [];
+        dimmedNodeIds.forEach(id => {
+            const node = nodes.get(id);
+            if (node) {
+                // Restore original colors if saved
+                const updateObj = { id: id };
+                
+                // Restore Color
+                if (node.originalColor !== undefined) {
+                    if (typeof node.originalColor === 'string') {
+                        updateObj.color = node.originalColor;
+                    } else {
+                        updateObj.color = {
+                            background: node.originalColor,
+                            border: node.originalBorder || '#666'
+                        };
+                    }
+                    updateObj.originalColor = null; 
+                    updateObj.originalBorder = null;
+                }
+
+                // Restore Font
+                if (node.originalFontColor !== undefined) {
+                     // If it was null, we delete the font property or reset to default
+                     // But vis.js merges, so we explicitly set it back.
+                     // Assuming default text is black or what was stored.
+                     const restoredColor = node.originalFontColor || '#000';
+                     updateObj.font = { color: restoredColor };
+                     updateObj.originalFontColor = null;
+                }
+
+                nodeUpdates.push(updateObj);
+            }
+        });
+        if (nodeUpdates.length > 0) nodes.update(nodeUpdates);
+        dimmedNodeIds.clear();
+    }
 }
 
 // Check if an edge is valid for bloodline tracing
@@ -77,16 +119,34 @@ function isValidBloodlineEdge(edge) {
     return true;
 }
 
+// Helper to convert color to dimmed rgba
+function getDimmedColor(hex) {
+    const alpha = 0.2; // 20% opacity for non-selected nodes (faint)
+    if (!hex) return `rgba(200, 200, 200, ${alpha})`;
+    
+    // Check if it's already an object (Vis.js color object)
+    if (typeof hex === 'object') return `rgba(200, 200, 200, ${alpha})`;
+
+    if (hex.startsWith('#')) {
+        // Use global hexToRGB from helpers.js
+        const rgb = hexToRGB(hex); 
+        return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+    }
+    // If it's named color or rgba already, just return a generic grey for simplicity to avoid parsing errors
+    // unless we want to be very specific.
+    return `rgba(200, 200, 200, ${alpha})`; 
+}
+
 function traceBack(nodeId) {
-    // 1. Reset current
+    // 1. Reset current highlighting
     resetBloodline();
 
     const edgesToHighlight = new Set();
+    const bloodlineNodes = new Set([nodeId]); // Track nodes in the bloodline
     const upQueue = [nodeId];
     const downQueue = [nodeId];
 
     // 1. Trace Up (Ancestors)
-    // Strictly follow INCOMING edges (Child <- Parent)
     const visitedUp = new Set([nodeId]);
     while (upQueue.length) {
         const curr = upQueue.shift();
@@ -97,13 +157,13 @@ function traceBack(nodeId) {
                 if (!visitedUp.has(e.from)) {
                     visitedUp.add(e.from);
                     upQueue.push(e.from);
+                    bloodlineNodes.add(e.from);
                 }
             }
         });
     }
 
     // 2. Trace Down (Descendants)
-    // Strictly follow OUTGOING edges (Parent -> Child)
     const visitedDown = new Set([nodeId]);
     while (downQueue.length) {
         const curr = downQueue.shift();
@@ -114,19 +174,19 @@ function traceBack(nodeId) {
                 if (!visitedDown.has(e.to)) {
                     visitedDown.add(e.to);
                     downQueue.push(e.to);
+                    bloodlineNodes.add(e.to);
                 }
             }
         });
     }
 
-    // 3. Apply Styles
-    const updates = [];
+    // 3. Apply Edge Styles
+    const edgeUpdates = [];
     edgesToHighlight.forEach(id => {
         const edge = edges.get(id);
         if (edge) {
-            // Save original style (use null if undefined so it resets to default later)
             highlightedEdges[id] = { color: edge.color || null, width: edge.width || null };
-            updates.push({
+            edgeUpdates.push({
                 id: id,
                 color: { color: 'red', highlight: 'red', hover: 'red', opacity: 1.0 },
                 width: 3
@@ -134,7 +194,64 @@ function traceBack(nodeId) {
         }
     });
 
-    if (updates.length) edges.update(updates);
+    if (edgeUpdates.length) edges.update(edgeUpdates);
+
+    // 4. Dim Non-Bloodline Nodes (Background + Text)
+    const allNodes = nodes.get();
+    const nodeUpdates = [];
+    
+    allNodes.forEach(node => {
+        // Exclude UI Triggers from dimming (keeps them visible/active-looking)
+        if (node.isTrigger) return;
+
+        if (!bloodlineNodes.has(node.id)) {
+            // -- Handle Background Color --
+            // Determine current background. Union nodes might have string color, others object.
+            let originalBg;
+            let originalBorder = null;
+
+            if (node.color) {
+                if (typeof node.color === 'string') {
+                    originalBg = node.color;
+                } else {
+                    originalBg = node.color.background;
+                    originalBorder = node.color.border;
+                }
+            } else {
+                originalBg = '#E0E0E0'; // Default fallback
+            }
+
+            // -- Handle Font Color --
+            let originalFontColor = null;
+            if (node.font && typeof node.font === 'object' && node.font.color) {
+                originalFontColor = node.font.color;
+            } else if (typeof node.font === 'string') {
+                 // Vis.js shorthand string '14px arial black' - hard to parse color, assume default
+                 originalFontColor = null; 
+            }
+            // If none set, assume standard black (#000) or user default (#666)
+            // We'll store what we found. If null, we restore to default later.
+
+            const updateObj = {
+                id: node.id,
+                color: {
+                    background: getDimmedColor(originalBg),
+                    border: 'rgba(100, 100, 100, 0.05)' // Almost invisible border
+                },
+                font: {
+                    color: 'rgba(0, 0, 0, 0.1)' // Greyed out text (faint)
+                },
+                originalColor: originalBg,
+                originalBorder: originalBorder,
+                originalFontColor: originalFontColor
+            };
+
+            nodeUpdates.push(updateObj);
+            dimmedNodeIds.add(node.id);
+        }
+    });
+
+    if (nodeUpdates.length > 0) nodes.update(nodeUpdates);
 }
 
 function resetProperties() {
@@ -319,8 +436,12 @@ function bindNetwork() {
     network.on("hoverNode", function (params) {
         clearTimeout(hoverTimeout);
         hoverTimeout = setTimeout(() => {
+            // IGNORE TRIGGERS on hover (Prevents dimming when moving to expand buttons)
+            const node = nodes.get(params.node);
+            if (node && node.isTrigger) return; 
+
             traceBack(params.node);
-        }, 100); // Wait 100ms before calculating
+        }, 100); 
     });
     
     network.on("blurNode", function (params) {
@@ -378,8 +499,13 @@ function bindNetwork() {
 
             // 4. Draw Floating LifeSpan (Year of Birth - Death) under the node
             if (n.lifeSpan) {
-                ctx.font = "12px Arial"; // Subtle small text
-                ctx.fillStyle = "#666"; // Subtle grey
+                // Adjust text color based on dimming
+                if (dimmedNodeIds.has(n.id)) {
+                    ctx.fillStyle = "rgba(100,100,100,0.3)";
+                } else {
+                    ctx.fillStyle = "#666";
+                }
+                ctx.font = "12px Arial"; 
                 ctx.textAlign = "center";
                 // Draw 35px below the node center
                 ctx.fillText(n.lifeSpan, pos.x, pos.y + 35);
